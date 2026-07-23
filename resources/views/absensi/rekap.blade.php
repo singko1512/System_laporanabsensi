@@ -63,7 +63,7 @@
                             <select name="user_id" class="form-select form-select-premium" onchange="document.getElementById('userForm').submit()">
                                 <option value="" disabled selected>-- Pilih Nama --</option>
                                 @foreach ($users as $u)
-                                    <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }} @if($u->nip_atau_id)({{ $u->nip_atau_id }})@endif</option>
+                                    <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }} @if($u->email)({{ $u->email }})@endif</option>
                                 @endforeach
                             </select>
                         </form>

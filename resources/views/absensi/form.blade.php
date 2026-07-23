@@ -68,7 +68,7 @@
                             <option value="" disabled selected>-- Pilih Nama --</option>
                             @foreach ($users as $user)
                                 <option value="{{ $user->id }}" {{ old('user_id') == $user->id ? 'selected' : '' }}>
-                                    {{ $user->nama }} @if($user->nip_atau_id)({{ $user->nip_atau_id }})@endif
+                                    {{ $user->nama }} @if($user->email)({{ $user->email }})@endif
                                 </option>
                             @endforeach
                         </select>

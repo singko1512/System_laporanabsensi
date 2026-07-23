@@ -125,7 +125,7 @@
             <tr>
                 <th width="5%">No</th>
                 <th width="35%">Nama Pegawai</th>
-                <th width="20%">NIP / ID</th>
+                <th width="20%">Email</th>
                 <th width="8%">Hadir</th>
                 <th width="8%">WFH</th>
                 <th width="8%">Sakit</th>
@@ -138,7 +138,7 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td class="font-bold">{{ $data->user->nama }}</td>
-                    <td>{{ $data->user->nip_atau_id ?? '-' }}</td>
+                    <td>{{ $data->user->email ?? '-' }}</td>
                     <td class="text-center">{{ $data->hadir }}</td>
                     <td class="text-center">{{ $data->wfh }}</td>
                     <td class="text-center">{{ $data->sakit }}</td>
@@ -153,7 +153,7 @@
     <div class="signature-container">
         <div class="signature-box">
             <p>Mengetahui,</p>
-            <p><strong>Administrator</strong></p>
+            <p><strong>Penanggung Jawab</strong></p>
             <div class="signature-space"></div>
             <p style="border-bottom: 1px solid #333; padding-bottom: 2px; display: inline-block; width: 100%;"></p>
             <p style="margin-top: 3px;">Sistem AbsensiKita</p>

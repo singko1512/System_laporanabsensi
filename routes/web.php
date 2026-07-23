@@ -25,6 +25,9 @@ Route::middleware(['admin'])->group(function () {
     Route::post('/admin/pegawai/tambah', [AdminController::class, 'storeUser'])->name('admin.user.store');
     Route::post('/admin/pegawai/update/{id}', [AdminController::class, 'updateUser'])->name('admin.user.update');
     Route::get('/admin/pegawai/hapus/{id}', [AdminController::class, 'destroyUser'])->name('admin.user.destroy');
+
+    Route::post('/admin/jadwal/simpan', [AdminController::class, 'updateSchedules'])->name('admin.jadwal.update');
+    Route::post('/admin/jadwal/acak', [AdminController::class, 'randomizeSchedules'])->name('admin.jadwal.random');
     
     // Export Data Rekap Bulanan
     Route::get('/admin/rekap/excel', [AdminController::class, 'exportExcel'])->name('admin.rekap.excel');

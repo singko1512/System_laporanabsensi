@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('md_user', function (Blueprint $table) {
             $table->id();
             $table->string('nama', 100);
-            $table->string('nip_atau_id', 50)->nullable()->unique();
+            $table->string('email', 100)->nullable()->unique();
             $table->timestamps();
         });
 

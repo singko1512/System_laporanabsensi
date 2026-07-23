@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Models\Absensi;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Storage;
 
 class AttendanceController extends Controller
 {
@@ -15,8 +14,27 @@ class AttendanceController extends Controller
      */
     public function home()
     {
-        $users = User::orderBy('nama', 'asc')->get();
-        return view('home', compact('users'));
+        $users = User::with('jadwalMingguan')->orderBy('nama', 'asc')->get();
+
+        $weekStart = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $weekEnd = $weekStart->copy()->addDays(4);
+        $todayKey = match (Carbon::now()->dayOfWeekIso) {
+            1 => 'senin',
+            2 => 'selasa',
+            3 => 'rabu',
+            4 => 'kamis',
+            5 => 'jumat',
+            default => null,
+        };
+        $dayMap = [
+            'senin' => $weekStart->copy(),
+            'selasa' => $weekStart->copy()->addDay(),
+            'rabu' => $weekStart->copy()->addDays(2),
+            'kamis' => $weekStart->copy()->addDays(3),
+            'jumat' => $weekStart->copy()->addDays(4),
+        ];
+
+        return view('home', compact('users', 'weekStart', 'weekEnd', 'todayKey', 'dayMap'));
     }
 
     /**
@@ -40,36 +58,41 @@ class AttendanceController extends Controller
         $filterType = $request->input('filter_type', 'all');
         $userId = $request->input('user_id');
 
-        if ($userId && $activeTab === 'rekap') {
-            $selectedUser = User::findOrFail($userId);
-
+        if ($activeTab === 'rekap') {
             if ($filterType === 'date' && $request->filled('date')) {
                 $startDate = Carbon::parse($request->input('date'))->startOfDay();
                 $endDate = Carbon::parse($request->input('date'))->endOfDay();
             } elseif ($filterType === 'month' && $request->filled('month_filter')) {
                 $parts = explode('-', $request->input('month_filter'));
-                $startDate = Carbon::createFromDate($parts[0], $parts[1], 1)->startOfMonth();
-                $endDate = Carbon::createFromDate($parts[0], $parts[1], 1)->endOfMonth();
+                $startDate = Carbon::createFromDate((int) $parts[0], (int) $parts[1], 1)->startOfMonth();
+                $endDate = Carbon::createFromDate((int) $parts[0], (int) $parts[1], 1)->endOfMonth();
             } else {
-                // All time — show everything
                 $startDate = Carbon::create(2020, 1, 1);
                 $endDate = Carbon::today()->endOfDay();
             }
 
-            $absensi = Absensi::where('user_id', $userId)
-                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                ->orderBy('tanggal', 'desc')
-                ->get();
+            $absensiQuery = Absensi::with('user')
+                ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
-            // Count weekdays
+            if ($userId) {
+                $selectedUser = User::findOrFail($userId);
+                $absensiQuery->where('user_id', $userId);
+            }
+
+            $absensi = $absensiQuery->orderBy('tanggal', 'desc')->orderBy('created_at', 'desc')->get();
+
             $totalWorkdays = 0;
             $tempDate = $startDate->copy();
             $maxCalcDate = $endDate->gt(Carbon::today()) ? Carbon::today() : $endDate;
             while ($tempDate->lte($maxCalcDate)) {
-                if (!$tempDate->isWeekend()) $totalWorkdays++;
+                if (! $tempDate->isWeekend()) {
+                    $totalWorkdays++;
+                }
                 $tempDate->addDay();
             }
-            if ($totalWorkdays == 0) $totalWorkdays = 1;
+            if ($totalWorkdays === 0) {
+                $totalWorkdays = 1;
+            }
 
             $stats['hadir'] = $absensi->where('status', 'hadir')->count();
             $stats['wfh'] = $absensi->where('status', 'wfh')->count();

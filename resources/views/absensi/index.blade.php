@@ -132,55 +132,138 @@
     .btn-submit:hover { box-shadow: 0 8px 28px rgba(108,92,231,0.35); transform: translateY(-1px); color: #fff; }
 
     /* ── Rekap Section ── */
+    .rekap-wrap {
+        max-width: 960px;
+        margin: 0 auto;
+    }
+
     .filter-bar {
         background: var(--white);
         border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 1.5rem 2rem;
+        padding: 1.25rem 1.5rem;
         box-shadow: 0 2px 12px rgba(0,0,0,0.02);
-        max-width: 680px;
-        margin: 0 auto 1.5rem;
+        margin-bottom: 1.25rem;
     }
-    .filter-bar label { font-size: 0.82rem; font-weight: 700; color: var(--dark); margin-bottom: 0.4rem; display: block; }
+    .filter-bar label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-bottom: 0.4rem;
+        display: block;
+    }
 
-    /* Stats row */
-    .stats-row {
+    .stats-grid {
         display: grid;
-        grid-template-columns: auto 1fr 1fr 1fr 1fr;
+        grid-template-columns: 1.2fr repeat(4, 1fr);
         gap: 0.75rem;
-        max-width: 680px;
-        margin: 0 auto 1.5rem;
+        margin-bottom: 1.25rem;
     }
-    @media (max-width: 640px) { .stats-row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 768px) {
+        .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
 
     .stat-card {
         background: var(--white);
         border: 1px solid var(--border);
         border-radius: 18px;
-        padding: 1.25rem;
+        padding: 1.1rem 1.15rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.01);
     }
 
-    .pct-ring { position: relative; width: 60px; height: 60px; }
+    .stat-card.highlight {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        grid-row: span 1;
+    }
+
+    .pct-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
     .pct-ring svg { width: 100%; height: 100%; }
     .pct-ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
     .pct-ring-fill { fill: none; stroke: var(--primary); stroke-width: 6; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
-    .pct-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; color: var(--dark); }
+    .pct-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: var(--dark); }
 
-    /* History section */
-    .history-section {
-        max-width: 680px;
-        margin: 0 auto;
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--dark);
+        line-height: 1;
+        margin-bottom: 0.25rem;
     }
+
+    .stat-label {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 0.25rem 0.55rem;
+        border-radius: 100px;
+        margin-bottom: 0.5rem;
+    }
+
     .history-card {
         background: var(--white);
         border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 1.5rem 2rem;
+        overflow: hidden;
         box-shadow: 0 2px 8px rgba(0,0,0,0.01);
     }
-    .history-item { padding: 1rem 0; border-bottom: 1px solid var(--border); }
-    .history-item:last-child { border-bottom: none; }
+
+    .history-card-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: #fafbff;
+    }
+
+    .rekap-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+
+    .rekap-table thead th {
+        background: #f1f5f9;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.85rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .rekap-table tbody td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+    }
+
+    .rekap-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .rekap-table tbody tr:hover {
+        background: #fafbff;
+    }
+
+    .filter-extra {
+        display: none;
+    }
+
+    .filter-extra.show {
+        display: block;
+    }
 </style>
 @endsection
 
@@ -226,7 +309,7 @@
                     <option value="" disabled selected>Pilih nama Anda...</option>
                     @foreach ($users as $user)
                         <option value="{{ $user->id }}" {{ old('user_id') == $user->id ? 'selected' : '' }}>
-                            {{ $user->nama }}@if($user->nip_atau_id) ({{ $user->nip_atau_id }})@endif
+                            {{ $user->nama }}@if($user->email) ({{ $user->email }})@endif
                         </option>
                     @endforeach
                 </select>
@@ -297,119 +380,145 @@
 
     @else
     {{-- ═══════════════ TAB 2: CEK REKAP & STATUS ═══════════════ --}}
+    <div class="rekap-wrap">
 
-    <!-- Filter Bar -->
-    <div class="filter-bar">
-        <form action="{{ route('absensi.index') }}" method="GET" class="row g-3 align-items-end">
-            <input type="hidden" name="tab" value="rekap">
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <form action="{{ route('absensi.index') }}" method="GET" id="rekapFilterForm">
+                <input type="hidden" name="tab" value="rekap">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label>Karyawan</label>
+                        <select name="user_id" class="form-select form-select-premium py-2">
+                            <option value="">Semua karyawan</option>
+                            @foreach ($users as $u)
+                                <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-            <div class="col-md-4">
-                <label>Karyawan</label>
-                <select name="user_id" class="form-select form-select-premium py-2" onchange="this.form.submit()">
-                    <option value="">Semua karyawan</option>
-                    @foreach ($users as $u)
-                        <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }}</option>
-                    @endforeach
-                </select>
-            </div>
+                    <div class="col-md-4">
+                        <label>Periode</label>
+                        <select name="filter_type" id="filter_type" class="form-select form-select-premium py-2">
+                            <option value="all" {{ $filterType == 'all' ? 'selected' : '' }}>Semua waktu</option>
+                            <option value="month" {{ $filterType == 'month' ? 'selected' : '' }}>Per bulan</option>
+                            <option value="date" {{ $filterType == 'date' ? 'selected' : '' }}>Tanggal spesifik</option>
+                        </select>
+                    </div>
 
-            <div class="col-md-4">
-                <label>Periode</label>
-                <select name="filter_type" class="form-select form-select-premium py-2">
-                    <option value="all" {{ $filterType == 'all' ? 'selected' : '' }}>Semua waktu</option>
-                    <option value="month" {{ $filterType == 'month' ? 'selected' : '' }}>Per bulan</option>
-                    <option value="date" {{ $filterType == 'date' ? 'selected' : '' }}>Tanggal spesifik</option>
-                </select>
-            </div>
+                    <div class="col-md-4 filter-extra {{ $filterType === 'date' ? 'show' : '' }}" id="dateFilter">
+                        <label>Tanggal</label>
+                        <input type="date" name="date" class="form-control form-control-premium py-2" value="{{ request('date') }}">
+                    </div>
 
-            <div class="col-md-4">
-                <label>Tanggal spesifik</label>
-                <input type="date" name="date" class="form-control form-control-premium py-2" value="{{ request('date') }}">
-            </div>
+                    <div class="col-md-4 filter-extra {{ $filterType === 'month' ? 'show' : '' }}" id="monthFilter">
+                        <label>Bulan</label>
+                        <input type="month" name="month_filter" class="form-control form-control-premium py-2" value="{{ request('month_filter', date('Y-m')) }}">
+                    </div>
 
-            <div class="col-12 text-end d-md-none">
-                <button type="submit" class="btn btn-premium-primary w-100 py-2">Terapkan</button>
-            </div>
-
-            <!-- Hidden submit trigger on desktop filter change -->
-            <noscript><div class="col-12"><button type="submit" class="btn btn-premium-primary">Filter</button></div></noscript>
-        </form>
-    </div>
-
-    <!-- Stats Row -->
-    <div class="stats-row">
-        <!-- Percentage Ring -->
-        <div class="stat-card d-flex align-items-center gap-3">
-            <div class="pct-ring">
-                <svg viewBox="0 0 100 100">
-                    <circle class="pct-ring-bg" cx="50" cy="50" r="40"/>
-                    @php $c = 2 * pi() * 40; $o = $c - ($stats['persentase']/100) * $c; @endphp
-                    <circle class="pct-ring-fill" cx="50" cy="50" r="40" style="stroke-dasharray:{{ $c }}; stroke-dashoffset:{{ $o }};"/>
-                </svg>
-                <span class="pct-label">{{ $stats['persentase'] }}%</span>
-            </div>
-            <div>
-                <div class="text-muted" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Persentase</div>
-                <div class="fw-bold" style="font-size:0.9rem;">Kehadiran</div>
-                <div class="text-muted small">Hadir + WFH</div>
-            </div>
-        </div>
-
-        @foreach([
-            ['Hadir', $stats['hadir'], 'fa-building', 's-icon-hadir', '#00b894'],
-            ['WFH', $stats['wfh'], 'fa-house', 's-icon-wfh', '#6c5ce7'],
-            ['Sakit', $stats['sakit'], 'fa-face-tired', 's-icon-sakit', '#e17055'],
-            ['Izin', $stats['izin'], 'fa-file-lines', 's-icon-izin', '#fdcb6e'],
-        ] as $s)
-        <div class="stat-card">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <div class="s-icon {{ $s[3] }}" style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:0.9rem;">
-                    <i class="fa-solid fa-{{ $s[2] }}"></i>
+                    <div class="col-md-4 ms-auto">
+                        <button type="submit" class="btn btn-premium-primary w-100 py-2">
+                            <i class="fa-solid fa-filter me-1"></i> Terapkan Filter
+                        </button>
+                    </div>
                 </div>
-                <span class="badge rounded-pill" style="font-size:0.68rem; font-weight:700; background:{{ $s[4] }}22; color:{{ $s[4] }};">
-                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ $s[4] }}; margin-right:4px; vertical-align:middle;"></span>{{ $s[0] }}
-                </span>
-            </div>
-            <div class="fw-extrabold fs-4" style="font-weight:800; color:var(--dark);">{{ $s[1] }}</div>
-            <div class="text-muted small">Total {{ $s[0] }}</div>
+            </form>
         </div>
-        @endforeach
-    </div>
 
-    <!-- History Section -->
-    <div class="history-section">
-        <h6 class="fw-bold mb-3" style="font-size:0.95rem; color:var(--dark);">Riwayat Laporan</h6>
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card highlight">
+                <div class="pct-ring">
+                    <svg viewBox="0 0 100 100">
+                        <circle class="pct-ring-bg" cx="50" cy="50" r="40"/>
+                        @php $c = 2 * pi() * 40; $o = $c - ($stats['persentase']/100) * $c; @endphp
+                        <circle class="pct-ring-fill" cx="50" cy="50" r="40" style="stroke-dasharray:{{ $c }}; stroke-dashoffset:{{ $o }};"/>
+                    </svg>
+                    <span class="pct-label">{{ $stats['persentase'] }}%</span>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Persentase</div>
+                    <div class="fw-bold">Kehadiran</div>
+                    <div class="text-muted small">Hadir + WFH · {{ $stats['total_hari_kerja'] }} hari kerja</div>
+                </div>
+            </div>
+
+            @foreach([
+                ['Hadir', $stats['hadir'], '#00b894', 'rgba(0,184,148,0.12)'],
+                ['WFH', $stats['wfh'], '#6c5ce7', 'rgba(108,92,231,0.12)'],
+                ['Sakit', $stats['sakit'], '#e17055', 'rgba(225,112,85,0.12)'],
+                ['Izin', $stats['izin'], '#d97706', 'rgba(245,158,11,0.15)'],
+            ] as $s)
+            <div class="stat-card">
+                <span class="stat-pill" style="background:{{ $s[3] }}; color:{{ $s[2] }};">
+                    <span style="width:6px;height:6px;border-radius:50%;background:{{ $s[2] }};"></span>
+                    {{ $s[0] }}
+                </span>
+                <div class="stat-value">{{ $s[1] }}</div>
+                <div class="stat-label">Total {{ $s[0] }}</div>
+            </div>
+            @endforeach
+        </div>
+
+        <!-- History Table -->
         <div class="history-card">
+            <div class="history-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h6 class="fw-bold mb-0" style="color:var(--dark);">
+                    <i class="fa-solid fa-clock-rotate-left me-1 text-primary"></i> Riwayat Laporan
+                </h6>
+                <span class="text-muted small">{{ $absensi->count() }} entri</span>
+            </div>
+
             @if ($absensi->isEmpty())
-                <div class="text-center py-5">
+                <div class="text-center py-5 px-3">
                     <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:56px; height:56px; background:rgba(108,92,231,0.06);">
                         <i class="fa-solid fa-file-lines text-primary" style="font-size:1.3rem;"></i>
                     </div>
                     <h6 class="fw-bold">Belum ada laporan</h6>
-                    <p class="text-muted small mb-0">Kirim absensi pertama Anda dari tab pertama.</p>
+                    <p class="text-muted small mb-0">Ubah filter atau kirim absensi pertama dari tab Form Absensi Baru.</p>
                 </div>
             @else
-                @foreach ($absensi as $rec)
-                <div class="history-item">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-bold small text-dark">{{ \Carbon\Carbon::parse($rec->tanggal)->translatedFormat('l, d F Y') }}</span>
-                        <span class="badge badge-status badge-{{ $rec->status }}">{{ $rec->status }}</span>
-                    </div>
-                    <div class="row align-items-start g-2">
-                        <div class="col">
-                            <p class="text-muted small mb-1" style="line-height:1.65;">{{ $rec->laporan }}</p>
-                            <span class="text-muted" style="font-size:0.72rem;"><i class="fa-regular fa-clock me-1"></i>{{ $rec->created_at->format('H:i') }} WIB</span>
-                        </div>
-                        @if ($rec->foto)
-                        <div class="col-auto">
-                            <a href="{{ asset($rec->foto) }}" target="_blank" class="d-block rounded-3 overflow-hidden border" style="width:56px; height:56px;">
-                                <img src="{{ asset($rec->foto) }}" class="w-100 h-100 object-fit-cover" alt="Bukti">
-                            </a>
-                        </div>
-                        @endif
-                    </div>
+                <div class="table-responsive">
+                    <table class="rekap-table">
+                        <thead>
+                            <tr>
+                                @if (!request('user_id'))
+                                    <th>Karyawan</th>
+                                @endif
+                                <th>Tanggal &amp; Waktu</th>
+                                <th>Status</th>
+                                <th>Laporan</th>
+                                <th>Lampiran</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($absensi as $rec)
+                            <tr>
+                                @if (!request('user_id'))
+                                    <td class="fw-semibold">{{ $rec->user->nama ?? '-' }}</td>
+                                @endif
+                                <td>
+                                    <div class="fw-medium">{{ \Carbon\Carbon::parse($rec->tanggal)->translatedFormat('d M Y') }}</div>
+                                    <div class="text-muted" style="font-size:0.75rem;">{{ $rec->created_at->format('H:i') }} WIB</div>
+                                </td>
+                                <td><span class="badge badge-status badge-{{ $rec->status }}">{{ strtoupper($rec->status) }}</span></td>
+                                <td style="max-width:280px;">
+                                    <span class="text-muted" style="font-size:0.82rem; line-height:1.5;">{{ Str::limit($rec->laporan, 80) }}</span>
+                                </td>
+                                <td>
+                                    @if ($rec->foto)
+                                        <a href="{{ asset($rec->foto) }}" target="_blank">
+                                            <img src="{{ asset($rec->foto) }}" alt="Lampiran" style="width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--border);">
+                                        </a>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
-                @endforeach
             @endif
         </div>
     </div>
@@ -463,13 +572,20 @@ document.addEventListener('DOMContentLoaded', function() {
     radios.forEach(r => r.addEventListener('change', updateLabels));
     updateLabels();
 
-    // Rekap tab: auto-submit on filter change (desktop)
-    const filterSelects = document.querySelectorAll('.filter-bar select');
-    filterSelects.forEach(sel => {
-        sel.addEventListener('change', function() {
-            this.form.submit();
-        });
-    });
+    // Rekap tab: toggle filter fields
+    const filterType = document.getElementById('filter_type');
+    const dateFilter = document.getElementById('dateFilter');
+    const monthFilter = document.getElementById('monthFilter');
+
+    function toggleFilterFields() {
+        if (!filterType) return;
+        const value = filterType.value;
+        dateFilter?.classList.toggle('show', value === 'date');
+        monthFilter?.classList.toggle('show', value === 'month');
+    }
+
+    filterType?.addEventListener('change', toggleFilterFields);
+    toggleFilterFields();
 });
 </script>
 @endsection

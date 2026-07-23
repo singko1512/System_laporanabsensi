@@ -168,6 +168,140 @@
 
     .card-employee .card-cta { color: #fff; }
     .card-admin .card-cta { color: var(--primary); }
+
+    /* ── Schedule Section ── */
+    .schedule-section {
+        max-width: 920px;
+        margin: 3rem auto 2rem;
+    }
+
+    .schedule-card {
+        background: var(--white);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+        overflow: hidden;
+    }
+
+    .schedule-header {
+        padding: 1.5rem 1.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .schedule-header h3 {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--dark);
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.3px;
+    }
+
+    .schedule-header p {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin: 0;
+    }
+
+    .schedule-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .schedule-table thead th {
+        background: #f1f5f9;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.85rem 0.75rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .schedule-table thead th:first-child {
+        text-align: left;
+        padding-left: 1.5rem;
+    }
+
+    .schedule-table thead th.is-today {
+        background: rgba(108, 92, 231, 0.1);
+        color: var(--primary);
+    }
+
+    .schedule-table tbody td {
+        padding: 0.85rem 0.75rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.85rem;
+    }
+
+    .schedule-table tbody td:first-child {
+        text-align: left;
+        padding-left: 1.5rem;
+        font-weight: 600;
+        color: var(--dark);
+    }
+
+    .schedule-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .schedule-table tbody tr:hover {
+        background: #fafbff;
+    }
+
+    .schedule-table tbody td.is-today {
+        background: rgba(108, 92, 231, 0.04);
+    }
+
+    .day-date {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 500;
+        color: var(--text-light);
+        margin-top: 2px;
+    }
+
+    .loc-badge {
+        display: inline-block;
+        padding: 0.28em 0.65em;
+        border-radius: 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    .loc-wfo {
+        background: rgba(0, 184, 148, 0.12);
+        color: #059669;
+    }
+
+    .loc-wfh {
+        background: rgba(108, 92, 231, 0.12);
+        color: var(--primary);
+    }
+
+    .schedule-empty {
+        text-align: center;
+        padding: 2.5rem 1.5rem;
+        color: var(--text-muted);
+    }
+
+    .schedule-empty h6 {
+        font-weight: 700;
+        color: var(--dark);
+        margin-bottom: 0.35rem;
+    }
+
+    .schedule-legend {
+        display: flex;
+        gap: 1.25rem;
+        padding: 0.85rem 1.5rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
 </style>
 @endsection
 
@@ -227,6 +361,66 @@
                 <span class="card-cta">Masuk dengan PIN <i class="fa-solid fa-arrow-right"></i></span>
             </a>
         @endif
+    </div>
+
+    {{-- Jadwal Mingguan --}}
+    <div class="schedule-section">
+        <div class="schedule-card">
+            <div class="schedule-header">
+                <h3><i class="fa-solid fa-calendar-week me-2 text-primary"></i>Jadwal Minggu Ini</h3>
+                <p>{{ $weekStart->translatedFormat('d F') }} – {{ $weekEnd->translatedFormat('d F Y') }}</p>
+            </div>
+
+            @if ($users->isEmpty())
+                <div class="schedule-empty">
+                    <h6>Belum ada jadwal</h6>
+                    <p>Jadwal WFO/WFH akan tampil setelah admin menambahkan pegawai dan mengatur jadwal.</p>
+                </div>
+            @else
+                @php
+                    $dayLabels = [
+                        'senin' => 'Senin',
+                        'selasa' => 'Selasa',
+                        'rabu' => 'Rabu',
+                        'kamis' => 'Kamis',
+                        'jumat' => 'Jumat',
+                    ];
+                @endphp
+                <div class="table-responsive">
+                    <table class="schedule-table">
+                        <thead>
+                            <tr>
+                                <th>Karyawan</th>
+                                @foreach ($dayLabels as $key => $label)
+                                    <th class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                        {{ $label }}
+                                        <span class="day-date">{{ $dayMap[$key]->format('d/m') }}</span>
+                                    </th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($users as $user)
+                                @php $jadwal = $user->jadwalMingguan; @endphp
+                                <tr>
+                                    <td>{{ $user->nama }}</td>
+                                    @foreach ($dayLabels as $key => $label)
+                                        @php $loc = $jadwal ? $jadwal->forDay($key) : ($key === 'jumat' ? 'wfh' : 'wfo'); @endphp
+                                        <td class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                            <span class="loc-badge loc-{{ $loc }}">{{ strtoupper($loc) }}</span>
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <div class="schedule-legend">
+                    <span><span class="loc-badge loc-wfo">WFO</span> Work From Office (Masuk Kantor)</span>
+                    <span><span class="loc-badge loc-wfh">WFH</span> Work From Home</span>
+                </div>
+            @endif
+        </div>
     </div>
 </div>
 @endsection

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Absensi;
 use App\Models\Pengaturan;
+use App\Models\JadwalMingguan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
@@ -50,60 +51,41 @@ class AdminController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $users = User::orderBy('nama', 'asc')->get();
+        $users = User::with('jadwalMingguan')->orderBy('nama', 'asc')->get();
 
-        // Monthly Filter parameters
-        $month = $request->input('month', Carbon::now()->month);
-        $year = $request->input('year', Carbon::now()->year);
+        $month = (int) $request->input('month', Carbon::now()->month);
+        $year = (int) $request->input('year', Carbon::now()->year);
+        $search = $request->input('search', '');
+        $status = $request->input('status', '');
 
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
         $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth();
 
-        // Calculate weekdays (Monday - Friday) in the range
-        $totalWorkdays = 0;
-        $tempDate = $startDate->copy();
-        $today = Carbon::today();
-        $maxCalcDate = $endDate->gt($today) ? $today : $endDate;
+        $absensiQuery = Absensi::with('user')
+            ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->orderBy('tanggal', 'desc')
+            ->orderBy('created_at', 'desc');
 
-        while ($tempDate->lte($maxCalcDate)) {
-            if (!$tempDate->isWeekend()) {
-                $totalWorkdays++;
-            }
-            $tempDate->addDay();
+        if ($search !== '') {
+            $absensiQuery->whereHas('user', function ($query) use ($search) {
+                $query->where('nama', 'like', '%' . $search . '%');
+            });
         }
 
-        if ($totalWorkdays == 0) {
-            $totalWorkdays = 1;
+        if ($status !== '' && $status !== 'all') {
+            $absensiQuery->where('status', $status);
         }
 
-        // Fetch users with their absensi in the range
-        $employeesWithAbsensi = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                  ->orderBy('tanggal', 'desc');
-        }])->orderBy('nama', 'asc')->get();
+        $absensiRecords = $absensiQuery->get();
 
-        $rekapData = [];
-        foreach ($employeesWithAbsensi as $emp) {
-            $hadir = $emp->absensi->where('status', 'hadir')->count();
-            $wfh = $emp->absensi->where('status', 'wfh')->count();
-            $sakit = $emp->absensi->where('status', 'sakit')->count();
-            $izin = $emp->absensi->where('status', 'izin')->count();
-
-            $attended = $hadir + $wfh;
-            $persentase = round(($attended / $totalWorkdays) * 100, 1);
-
-            $rekapData[] = (object)[
-                'user' => $emp,
-                'hadir' => $hadir,
-                'wfh' => $wfh,
-                'sakit' => $sakit,
-                'izin' => $izin,
-                'persentase' => $persentase,
-                'absensi' => $emp->absensi,
-            ];
-        }
-
-        return view('admin.dashboard', compact('users', 'rekapData', 'month', 'year', 'totalWorkdays'));
+        return view('admin.dashboard', compact(
+            'users',
+            'absensiRecords',
+            'month',
+            'year',
+            'search',
+            'status'
+        ));
     }
 
     /**
@@ -113,18 +95,19 @@ class AdminController extends Controller
     {
         $request->validate([
             'nama' => 'required|string|max:100',
-            'nip_atau_id' => 'nullable|string|max:50|unique:md_user,nip_atau_id',
+            'email' => 'nullable|email|max:100|unique:md_user,email',
         ], [
             'nama.required' => 'Nama pegawai wajib diisi.',
-            'nip_atau_id.unique' => 'NIP / ID sudah terdaftar.',
+            'email.email' => 'Format email tidak valid.',
+            'email.unique' => 'Email sudah terdaftar.',
         ]);
 
         User::create([
             'nama' => $request->input('nama'),
-            'nip_atau_id' => $request->input('nip_atau_id'),
-        ]);
+            'email' => $request->input('email'),
+        ])->jadwalMingguan()->create(JadwalMingguan::defaultSchedule());
 
-        return redirect()->route('admin.dashboard')->with('success_swal', 'Pegawai baru berhasil ditambahkan!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Pegawai baru berhasil ditambahkan!');
     }
 
     /**
@@ -136,18 +119,19 @@ class AdminController extends Controller
 
         $request->validate([
             'nama' => 'required|string|max:100',
-            'nip_atau_id' => 'nullable|string|max:50|unique:md_user,nip_atau_id,' . $id,
+            'email' => 'nullable|email|max:100|unique:md_user,email,' . $id,
         ], [
             'nama.required' => 'Nama pegawai wajib diisi.',
-            'nip_atau_id.unique' => 'NIP / ID sudah terdaftar.',
+            'email.email' => 'Format email tidak valid.',
+            'email.unique' => 'Email sudah terdaftar.',
         ]);
 
         $user->update([
             'nama' => $request->input('nama'),
-            'nip_atau_id' => $request->input('nip_atau_id'),
+            'email' => $request->input('email'),
         ]);
 
-        return redirect()->route('admin.dashboard')->with('success_swal', 'Data pegawai berhasil diperbarui!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Data pegawai berhasil diperbarui!');
     }
 
     /**
@@ -158,7 +142,62 @@ class AdminController extends Controller
         $user = User::findOrFail($id);
         $user->delete(); // automatically cascades absensi deletion due to DB schema constraint
 
-        return redirect()->route('admin.dashboard')->with('success_swal', 'Pegawai berhasil dihapus!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Pegawai berhasil dihapus!');
+    }
+
+    /**
+     * Save weekly schedules for all employees.
+     */
+    public function updateSchedules(Request $request)
+    {
+        $weekdays = ['senin', 'selasa', 'rabu', 'kamis'];
+        $schedules = $request->input('schedules', []);
+
+        foreach ($schedules as $userId => $schedule) {
+            $user = User::find($userId);
+            if (! $user) {
+                continue;
+            }
+
+            $data = ['jumat' => 'wfh'];
+            foreach ($weekdays as $day) {
+                $data[$day] = in_array($schedule[$day] ?? 'wfo', ['wfo', 'wfh'], true)
+                    ? $schedule[$day]
+                    : 'wfo';
+            }
+
+            $user->jadwalMingguan()->updateOrCreate(
+                ['user_id' => $user->id],
+                $data
+            );
+        }
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal mingguan berhasil disimpan!');
+    }
+
+    /**
+     * Randomly assign WFO/WFH patterns to all employees.
+     */
+    public function randomizeSchedules()
+    {
+        $users = User::orderBy('nama', 'asc')->get();
+
+        if ($users->isEmpty()) {
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('error_swal', 'Belum ada pegawai untuk diacak jadwalnya.');
+        }
+
+        $shuffled = $users->shuffle();
+        $half = (int) ceil($shuffled->count() / 2);
+
+        $shuffled->each(function (User $user, int $index) use ($half) {
+            $pattern = $index < $half ? JadwalMingguan::grupA() : JadwalMingguan::grupB();
+            $user->jadwalMingguan()->updateOrCreate(
+                ['user_id' => $user->id],
+                $pattern
+            );
+        });
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal berhasil diacak! Jumat tetap WFH untuk semua pegawai.');
     }
 
     /**

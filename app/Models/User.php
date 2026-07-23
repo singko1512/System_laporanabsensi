@@ -13,11 +13,16 @@ class User extends Model
 
     protected $fillable = [
         'nama',
-        'nip_atau_id',
+        'email',
     ];
 
     public function absensi()
     {
         return $this->hasMany(Absensi::class, 'user_id');
+    }
+
+    public function jadwalMingguan()
+    {
+        return $this->hasOne(JadwalMingguan::class, 'user_id');
     }
 }

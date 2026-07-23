@@ -57,7 +57,7 @@ class AttendanceTest extends TestCase
             'pin' => '123456',
         ]);
 
-        $response->assertRedirect(route('admin.dashboard'));
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'pegawai']));
         $response->assertSessionHas('admin_authenticated', true);
     }
 
@@ -86,31 +86,31 @@ class AttendanceTest extends TestCase
         // 1. Create User
         $response = $this->post(route('admin.user.store'), [
             'nama' => 'John Doe',
-            'nip_atau_id' => '12345',
+            'email' => 'john.doe@example.com',
         ]);
-        $response->assertRedirect(route('admin.dashboard'));
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'pegawai']));
         $this->assertDatabaseHas('md_user', [
             'nama' => 'John Doe',
-            'nip_atau_id' => '12345',
+            'email' => 'john.doe@example.com',
         ]);
 
-        $user = User::where('nip_atau_id', '12345')->first();
+        $user = User::where('email', 'john.doe@example.com')->first();
 
         // 2. Update User
         $response = $this->post(route('admin.user.update', $user->id), [
             'nama' => 'John Doe Edited',
-            'nip_atau_id' => '12345-edited',
+            'email' => 'john.edited@example.com',
         ]);
-        $response->assertRedirect(route('admin.dashboard'));
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'pegawai']));
         $this->assertDatabaseHas('md_user', [
             'id' => $user->id,
             'nama' => 'John Doe Edited',
-            'nip_atau_id' => '12345-edited',
+            'email' => 'john.edited@example.com',
         ]);
 
         // 3. Delete User
         $response = $this->get(route('admin.user.destroy', $user->id));
-        $response->assertRedirect(route('admin.dashboard'));
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'pegawai']));
         $this->assertDatabaseMissing('md_user', [
             'id' => $user->id,
         ]);
