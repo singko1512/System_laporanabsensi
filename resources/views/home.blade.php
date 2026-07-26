@@ -191,7 +191,7 @@
             <div class="feature-icon">
                 <i class="fa-regular fa-calendar-check"></i>
             </div>
-            <div class="card-label">Untuk Karyawan</div>
+            <div class="card-label">Untuk Peserta Magang</div>
             <div class="card-title">Menu Absensi & Laporan</div>
             <div class="card-desc">
                 Isi absensi harian, unggah foto lokasi, dan kirim laporan pekerjaan Anda.
@@ -208,7 +208,7 @@
                 <div class="card-label">Untuk Admin</div>
                 <div class="card-title">Akses Admin</div>
                 <div class="card-desc">
-                    Kelola data karyawan, pantau rekap, dan ekspor laporan.
+                    Kelola data peserta magang, pantau rekap, dan ekspor laporan.
                     Diperlukan PIN 6-digit.
                 </div>
                 <span class="card-cta">Buka Dashboard <i class="fa-solid fa-arrow-right"></i></span>
@@ -221,7 +221,7 @@
                 <div class="card-label">Untuk Admin</div>
                 <div class="card-title">Akses Admin</div>
                 <div class="card-desc">
-                    Kelola data karyawan, pantau rekap, dan ekspor laporan.
+                    Kelola data peserta magang, pantau rekap, dan ekspor laporan.
                     Diperlukan PIN 6-digit.
                 </div>
                 <span class="card-cta">Masuk dengan PIN <i class="fa-solid fa-arrow-right"></i></span>

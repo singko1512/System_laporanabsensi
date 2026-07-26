@@ -45,7 +45,8 @@ class AbsensiExport implements FromCollection, WithHeadings, WithMapping, Should
         $endDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
 
         return User::with(['absensi' => function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+            $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->with('statusMaster');
         }])->orderBy('nama', 'asc')->get();
     }
 
@@ -53,11 +54,11 @@ class AbsensiExport implements FromCollection, WithHeadings, WithMapping, Should
     {
         $namaBulan = Carbon::createFromDate($this->year, $this->month, 1)->translatedFormat('F');
         return [
-            ['REKAPITULASI ABSENSI PEGAWAI'],
+            ['REKAPITULASI ABSENSI PESERTA MAGANG'],
             ['Bulan: ' . $namaBulan . ' ' . $this->year],
             ['Total Hari Kerja: ' . $this->totalWorkdays . ' Hari'],
             [], // Empty row
-            ['No', 'Nama Pegawai', 'NIP / ID', 'Hadir', 'WFH', 'Sakit', 'Izin', 'Persentase Kehadiran']
+            ['No', 'Nama Peserta Magang', 'NIP / ID', 'Pembimbing Magang', 'Bidang Magang', 'Hadir', 'WFH', 'Sakit', 'Izin', 'Persentase Kehadiran']
         ];
     }
 
@@ -80,6 +81,8 @@ class AbsensiExport implements FromCollection, WithHeadings, WithMapping, Should
             $no++,
             $user->nama,
             $user->nip_atau_id ?? '-',
+            $user->pembimbing_magang ?? '-',
+            $user->bidang_magang ?? '-',
             $hadir,
             $wfh,
             $sakit,

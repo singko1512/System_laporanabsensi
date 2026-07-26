@@ -2,12 +2,18 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use App\Models\Absensi;
+use App\Models\JadwalMingguan;
+use App\Models\MasterData;
 use App\Models\Pengaturan;
+use App\Models\Project;
+use App\Models\ProjectDayAssignment;
+use App\Models\ProjectNote;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
@@ -16,105 +22,243 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Seed Admin PIN (default: '123456' hashed)
+        MasterData::seedDefaults();
+
         Pengaturan::updateOrCreate(
             ['kunci' => 'pin_admin'],
-            ['nilai' => Hash::make('123456')]
+            ['nilai' => Hash::make('180909')]
         );
 
-        // 2. Seed Employee Users
-        $employees = [
-            ['nama' => 'Ahmad Fauzi', 'nip_atau_id' => '19920815201801'],
-            ['nama' => 'Budi Santoso', 'nip_atau_id' => '19890402201503'],
-            ['nama' => 'Citra Lestari', 'nip_atau_id' => '19950711202012'],
-            ['nama' => 'Dewi Sartika', 'nip_atau_id' => '19930225201908'],
-            ['nama' => 'Eko Prasetyo', 'nip_atau_id' => '19901103201604'],
-            ['nama' => 'Fitri Handayani', 'nip_atau_id' => '19970519202202'],
+        $today = Carbon::today(config('app.timezone'));
+        $mulaiMagang = $today->copy()->startOfMonth()->subMonth();
+        $selesaiMagang = $mulaiMagang->copy()->addMonths(3)->endOfMonth();
+
+        $dummyUsers = [
+            ['nama' => 'Andi Pratama', 'nip_atau_id' => 'INT-2026-001', 'email' => 'andi.pratama@example.test', 'pembimbing_magang' => 'Rina Kartika', 'bidang_magang' => 'Backend Developer'],
+            ['nama' => 'Bunga Maharani', 'nip_atau_id' => 'INT-2026-002', 'email' => 'bunga.maharani@example.test', 'pembimbing_magang' => 'Rina Kartika', 'bidang_magang' => 'Frontend Developer'],
+            ['nama' => 'Candra Wijaya', 'nip_atau_id' => 'INT-2026-003', 'email' => 'candra.wijaya@example.test', 'pembimbing_magang' => 'Dimas Prakoso', 'bidang_magang' => 'Quality Assurance'],
+            ['nama' => 'Dewi Lestari', 'nip_atau_id' => 'INT-2026-004', 'email' => 'dewi.lestari@example.test', 'pembimbing_magang' => 'Sari Amalia', 'bidang_magang' => 'UI/UX Designer'],
+            ['nama' => 'Eko Saputra', 'nip_atau_id' => 'INT-2026-005', 'email' => 'eko.saputra@example.test', 'pembimbing_magang' => 'Dimas Prakoso', 'bidang_magang' => 'Data Analyst'],
+            ['nama' => 'Fitri Anjani', 'nip_atau_id' => 'INT-2026-006', 'email' => 'fitri.anjani@example.test', 'pembimbing_magang' => 'Rizky Maulana', 'bidang_magang' => 'System Support'],
+            ['nama' => 'Gilang Ramadhan', 'nip_atau_id' => 'INT-2026-007', 'email' => 'gilang.ramadhan@example.test', 'pembimbing_magang' => 'Sari Amalia', 'bidang_magang' => 'Content & Documentation'],
+            ['nama' => 'Hana Putri', 'nip_atau_id' => 'INT-2026-008', 'email' => 'hana.putri@example.test', 'pembimbing_magang' => 'Rizky Maulana', 'bidang_magang' => 'Project Admin'],
         ];
 
-        $userInstances = [];
-        foreach ($employees as $emp) {
-            $userInstances[] = User::create($emp);
-        }
-
-        // 3. Seed historical attendance for the last 14 days (excluding weekends)
-        $statuses = ['hadir', 'wfh', 'sakit', 'izin'];
-        $hadirTasks = [
-            'Menyelesaikan modul frontend dashboard admin',
-            'Rapat tim mingguan dan sinkronisasi database server',
-            'Melakukan bug fixing pada sistem pembayaran dan checkout',
-            'Optimalisasi performa query SQL dan indexing tabel database',
-            'Membuat dokumentasi API endpoint untuk integrasi sistem mobile',
-            'Maintenance berkala server staging dan backup data harian',
-            'Review merge request developer magang dan diskusi teknis',
-            'Mengatur konfigurasi keamanan web firewall dan SSL renewal'
-        ];
-        $wfhTasks = [
-            'WFH: Menyusun laporan bulanan divisi IT',
-            'WFH: Melakukan riset implementasi design system baru',
-            'WFH: Melanjutkan penulisan unit test untuk modul otentikasi',
-            'WFH: Koordinasi online via Zoom mengenai update progress sprint 2',
-            'WFH: Analisis performa web Core Web Vitals dan refactoring CSS'
-        ];
-        $sakitReasons = [
-            'Sakit demam dan flu, berobat ke klinik terdekat',
-            'Sakit radang tenggorokan berat, disarankan istirahat oleh dokter',
-            'Mengalami cedera otot punggung ringan saat olahraga',
-            'Sakit migrain berkepanjangan sejak tadi pagi'
-        ];
-        $izinReasons = [
-            'Izin mengurus perpanjangan STNK kendaraan bermotor',
-            'Izin menghadiri upacara pernikahan saudara kandung',
-            'Izin mengantar orang tua kontrol rutin ke rumah sakit',
-            'Izin keperluan mendesak di kantor kelurahan'
+        $schedulePatterns = [
+            JadwalMingguan::defaultSchedule(),
+            JadwalMingguan::grupA(),
+            JadwalMingguan::grupB(),
         ];
 
-        // Seed from 18 days ago up to today
-        for ($i = 18; $i >= 0; $i--) {
-            $date = Carbon::today()->subDays($i);
+        $users = collect($dummyUsers)->map(function (array $data, int $index) use ($mulaiMagang, $selesaiMagang, $schedulePatterns): User {
+            $userPayload = [
+                'nama' => $data['nama'],
+                'email' => $data['email'],
+                'tanggal_mulai_magang' => $mulaiMagang->copy()->addDays($index % 4)->toDateString(),
+                'tanggal_selesai_magang' => $selesaiMagang->copy()->addDays($index % 6)->toDateString(),
+            ];
 
-            // Skip weekends
-            if ($date->isWeekend()) {
-                continue;
+            if (Schema::hasColumn('md_user', 'nip_atau_id')) {
+                $userPayload['nip_atau_id'] = $data['nip_atau_id'];
             }
 
-            foreach ($userInstances as $user) {
-                // Randomize presence status
-                // 75% hadir, 15% wfh, 5% sakit, 5% izin
-                $rand = rand(1, 100);
-                if ($rand <= 75) {
-                    $status = 'hadir';
-                    $laporan = $hadirTasks[array_rand($hadirTasks)];
-                    $foto = 'dummy_hadir.jpg'; // We can use mock paths
-                } elseif ($rand <= 90) {
-                    $status = 'wfh';
-                    $laporan = $wfhTasks[array_rand($wfhTasks)];
-                    $foto = 'dummy_wfh.jpg';
-                } elseif ($rand <= 95) {
-                    $status = 'sakit';
-                    $laporan = $sakitReasons[array_rand($sakitReasons)];
-                    $foto = 'dummy_suratsakit.jpg';
-                } else {
-                    $status = 'izin';
-                    $laporan = $izinReasons[array_rand($izinReasons)];
-                    $foto = rand(0, 1) ? 'dummy_izin.jpg' : null; // photo is optional for izin
-                }
+            if (Schema::hasColumn('md_user', 'pembimbing_magang')) {
+                $userPayload['pembimbing_magang'] = $data['pembimbing_magang'];
+            }
 
-                // Don't log future or partial current day randomly
-                if ($date->isToday() && rand(1, 100) > 60) {
-                    continue; // some users haven't clocked in today yet
-                }
+            if (Schema::hasColumn('md_user', 'bidang_magang')) {
+                $userPayload['bidang_magang'] = $data['bidang_magang'];
+            }
 
-                Absensi::create([
+            $user = User::updateOrCreate(
+                ['email' => $data['email']],
+                $userPayload
+            );
+
+            JadwalMingguan::updateOrCreate(
+                ['user_id' => $user->id],
+                $schedulePatterns[$index % count($schedulePatterns)]
+            );
+
+            return $user;
+        })->values();
+
+        $this->seedDummyAbsensi($users, $today);
+        $this->seedDummyProjects($users, $today);
+    }
+
+    private function seedDummyAbsensi($users, Carbon $today): void
+    {
+        if (! Schema::hasTable('md_absensi')) {
+            return;
+        }
+
+        $workdays = collect();
+        $date = $today->copy();
+
+        while ($workdays->count() < 5) {
+            if (! $date->isWeekend()) {
+                $workdays->prepend($date->copy());
+            }
+
+            $date->subDay();
+        }
+
+        $statusPatterns = [
+            ['hadir', 'wfh', 'hadir', 'hadir', 'wfh'],
+            ['wfh', 'hadir', 'hadir', 'izin', 'hadir'],
+            ['hadir', 'hadir', 'sakit', 'hadir', 'wfh'],
+            ['hadir', 'wfh', 'hadir', 'wfh', 'hadir'],
+        ];
+
+        $locations = [
+            ['lat' => -6.2087634, 'lng' => 106.8455990],
+            ['lat' => -6.1753924, 'lng' => 106.8271528],
+            ['lat' => -6.2607131, 'lng' => 106.7816165],
+            ['lat' => -6.2297280, 'lng' => 106.6894312],
+            ['lat' => -6.4024844, 'lng' => 106.7942405],
+            ['lat' => -6.9147444, 'lng' => 107.6098111],
+            ['lat' => -7.2504450, 'lng' => 112.7688450],
+            ['lat' => -6.9903988, 'lng' => 110.4229104],
+        ];
+
+        $laporanTemplates = [
+            'Menyusun rekap absensi dan validasi data laporan harian.',
+            'Mengerjakan modul timeline project dan melakukan pengecekan catatan tugas.',
+            'Merapikan tampilan dashboard admin serta menguji alur input data.',
+            'Membuat dokumentasi kebutuhan fitur dan mencatat hasil progres pekerjaan.',
+            'Melakukan review data WFH, lokasi, dan laporan aktivitas peserta magang.',
+        ];
+
+        $users->each(function (User $user, int $userIndex) use ($workdays, $statusPatterns, $locations, $laporanTemplates): void {
+            foreach ($workdays as $dayIndex => $date) {
+                $status = $statusPatterns[$userIndex % count($statusPatterns)][$dayIndex];
+                $isWfh = $status === 'wfh';
+
+                Absensi::updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'tanggal' => $date->toDateString(),
+                    ],
+                    [
+                        'status' => $status,
+                        'foto' => null,
+                        'foto_kamera' => null,
+                        'lokasi_latitude' => $isWfh ? $locations[$userIndex]['lat'] : null,
+                        'lokasi_longitude' => $isWfh ? $locations[$userIndex]['lng'] : null,
+                        'lokasi_akurasi' => $isWfh ? 18 + ($userIndex * 3) : null,
+                        'lokasi_diambil_pada' => $isWfh ? $date->copy()->setTime(8 + ($userIndex % 2), 10 + $dayIndex, 0) : null,
+                        'laporan' => $laporanTemplates[$dayIndex],
+                    ]
+                );
+            }
+        });
+    }
+
+    private function seedDummyProjects($users, Carbon $today): void
+    {
+        if (! Schema::hasTable('md_projects') || ! Schema::hasTable('md_project_notes')) {
+            return;
+        }
+
+        $projectTemplates = [
+            ['nama' => 'Dashboard Rekap Absensi', 'kebutuhan' => 'Filter rekap, ringkasan status, dan export laporan bulanan.'],
+            ['nama' => 'Validasi Absensi WFH', 'kebutuhan' => 'Penguncian lokasi, bukti foto aktivitas, dan catatan pekerjaan WFH.'],
+            ['nama' => 'Timeline Project Admin', 'kebutuhan' => 'Gantt harian, catatan prioritas, dan tombol penyelesaian note.'],
+            ['nama' => 'Dokumentasi SOP Absensi', 'kebutuhan' => 'Alur penggunaan sistem, aturan WFO/WFH, dan format laporan harian.'],
+        ];
+
+        $users->each(function (User $user, int $index) use ($today, $projectTemplates, $users): void {
+            $template = $projectTemplates[$index % count($projectTemplates)];
+            $startDate = $today->copy()->startOfWeek(Carbon::MONDAY)->subDays($index % 3);
+            $endDate = $startDate->copy()->addDays(13 + ($index % 4));
+
+            $project = Project::updateOrCreate(
+                [
                     'user_id' => $user->id,
-                    'tanggal' => $date->format('Y-m-d'),
-                    'status' => $status,
-                    'foto' => $foto,
-                    'laporan' => $laporan,
-                    'created_at' => $date->copy()->setTime(rand(7, 9), rand(0, 59)),
-                    'updated_at' => $date->copy()->setTime(rand(16, 17), rand(0, 59)),
-                ]);
+                    'nama' => $template['nama'],
+                ],
+                [
+                    'kebutuhan' => $template['kebutuhan'],
+                    'tanggal_mulai' => $startDate->toDateString(),
+                    'tanggal_selesai' => $endDate->toDateString(),
+                    'status' => 'aktif',
+                ]
+            );
+
+            if (Schema::hasTable('md_project_user')) {
+                $memberIds = collect([
+                    $user->id,
+                    optional($users->get(($index + 1) % $users->count()))->id,
+                ])->filter()->unique()->values()->all();
+
+                $project->members()->sync($memberIds);
             }
-        }
+
+            $notes = [
+                [
+                    'tanggal' => $startDate->copy()->addDays(1),
+                    'kategori' => 'rendah',
+                    'judul' => 'Rapikan data awal',
+                    'catatan' => 'Lengkapi data peserta magang, jadwal, dan kebutuhan awal project.',
+                    'selesai_pada' => $today->copy()->subDay()->setTime(16, 30),
+                ],
+                [
+                    'tanggal' => $today->copy()->isWeekend() ? $today->copy()->next(Carbon::MONDAY) : $today->copy(),
+                    'kategori' => 'sedang',
+                    'judul' => 'Checkpoint progres harian',
+                    'catatan' => 'Update pekerjaan yang sudah selesai dan catat kendala yang perlu dicek admin.',
+                    'selesai_pada' => null,
+                ],
+                [
+                    'tanggal' => $startDate->copy()->addDays(5 + ($index % 3)),
+                    'kategori' => 'tinggi',
+                    'judul' => 'Review hasil modul',
+                    'catatan' => 'Pastikan hasil pekerjaan sesuai kebutuhan sebelum masuk tahap berikutnya.',
+                    'selesai_pada' => null,
+                ],
+            ];
+
+            foreach ($notes as $note) {
+                $notePayload = [
+                    'kategori' => $note['kategori'],
+                    'catatan' => $note['catatan'],
+                    'selesai_pada' => $note['selesai_pada'],
+                ];
+
+                if (Schema::hasColumn('md_project_notes', 'user_id')) {
+                    $notePayload['user_id'] = $user->id;
+                }
+
+                ProjectNote::updateOrCreate(
+                    [
+                        'project_id' => $project->id,
+                        'tanggal' => $note['tanggal']->toDateString(),
+                        'judul' => $note['judul'],
+                    ],
+                    $notePayload
+                );
+            }
+
+            if (Schema::hasTable('md_project_day_assignments')) {
+                foreach ($memberIds ?? [$user->id] as $memberIndex => $memberId) {
+                    ProjectDayAssignment::updateOrCreate(
+                        [
+                            'project_id' => $project->id,
+                            'user_id' => $memberId,
+                            'tanggal' => $startDate->copy()->addDays($memberIndex + 1)->toDateString(),
+                        ]
+                    );
+
+                    ProjectDayAssignment::updateOrCreate(
+                        [
+                            'project_id' => $project->id,
+                            'user_id' => $memberId,
+                            'tanggal' => $today->copy()->isWeekend() ? $today->copy()->next(Carbon::MONDAY)->toDateString() : $today->toDateString(),
+                        ]
+                    );
+                }
+            }
+        });
     }
 }

@@ -304,12 +304,34 @@
     <!-- Footer -->
     <footer>
         <div class="container">
-            &copy; {{ date('Y') }} AbsensiKita &middot; Sistem Laporan Absensi Pegawai
+            &copy; {{ date('Y') }} AbsensiKita &middot; Sistem Laporan Absensi Magang
         </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function installInspectGuards() {
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
+
+            document.addEventListener('keydown', function(e) {
+                const key = e.key.toLowerCase();
+                const blocked =
+                    e.key === 'F12' ||
+                    (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+                    (e.ctrlKey && ['u', 's'].includes(key));
+
+                if (blocked) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            });
+        }
+
+        installInspectGuards();
+
         function triggerAdminLogin() {
             Swal.fire({
                 title: 'Verifikasi Admin',
