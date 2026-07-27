@@ -20,11 +20,13 @@ class ProjectNote extends Model
         'judul',
         'catatan',
         'selesai_pada',
+        'user_selesai_pada',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
         'selesai_pada' => 'datetime',
+        'user_selesai_pada' => 'datetime',
     ];
 
     public function project()

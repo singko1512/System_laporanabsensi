@@ -127,4 +127,140 @@ class AttendanceTest extends TestCase
             'id' => $user->id,
         ]);
     }
+
+    /**
+     * Test WFH attendance does not require camera photo.
+     */
+    public function test_wfh_attendance_does_not_require_camera_photo(): void
+    {
+        $user = User::create([
+            'nama' => 'Alice Intern',
+            'email' => 'alice@example.test',
+            'bidang_magang' => 'Backend Developer',
+        ]);
+
+        \App\Models\MasterData::seedDefaults();
+
+        $response = $this->post(route('absensi.store'), [
+            'user_id' => $user->id,
+            'status' => 'wfh',
+            'lokasi_latitude' => -6.2087,
+            'lokasi_longitude' => 106.8456,
+            'laporan' => 'Working on backend tasks',
+        ]);
+
+        $response->assertRedirect(route('absensi.index'));
+        $this->assertDatabaseHas('md_absensi', [
+            'user_id' => $user->id,
+            'status_id' => \App\Models\MasterData::idFor(\App\Models\MasterData::ABSENSI_STATUS, 'wfh'),
+            'laporan' => 'Working on backend tasks',
+        ]);
+    }
+
+    /**
+     * Test Hadir attendance still requires camera photo.
+     */
+    public function test_hadir_attendance_still_requires_camera_photo(): void
+    {
+        $user = User::create([
+            'nama' => 'Bob Intern',
+            'email' => 'bob@example.test',
+            'bidang_magang' => 'Frontend Developer',
+        ]);
+
+        \App\Models\MasterData::seedDefaults();
+
+        $response = $this->post(route('absensi.store'), [
+            'user_id' => $user->id,
+            'status' => 'hadir',
+            'laporan' => 'Working on frontend tasks',
+        ]);
+
+        $response->assertSessionHasErrors(['foto_kamera']);
+    }
+
+    /**
+     * Test note completion flow (user completion and admin confirmation).
+     */
+    public function test_note_completion_flow(): void
+    {
+        $user = User::create([
+            'nama' => 'Charlie Intern',
+            'email' => 'charlie@example.test',
+            'bidang_magang' => 'Quality Assurance',
+        ]);
+
+        \App\Models\MasterData::seedDefaults();
+
+        $project = \App\Models\Project::create([
+            'user_id' => $user->id,
+            'nama' => 'QA Project',
+            'tanggal_mulai' => now()->toDateString(),
+            'tanggal_selesai' => now()->addDays(5)->toDateString(),
+            'status' => 'aktif',
+        ]);
+
+        $note = \App\Models\ProjectNote::create([
+            'project_id' => $project->id,
+            'user_id' => $user->id,
+            'tanggal' => now()->toDateString(),
+            'kategori' => 'sedang',
+            'judul' => 'Write test cases',
+        ]);
+
+        // User marks it complete
+        $response = $this->post(route('timeline.note.complete', $note->id), [
+            'user_id' => $user->id,
+        ]);
+
+        $response->assertRedirect();
+        $note->refresh();
+        $this->assertNotNull($note->user_selesai_pada);
+        $this->assertNull($note->selesai_pada);
+
+        // Admin marks/confirms it complete
+        $response2 = $this->withSession(['admin_authenticated' => true])
+            ->post(route('timeline.note.complete', $note->id));
+
+        $response2->assertRedirect();
+        $note->refresh();
+        $this->assertNotNull($note->user_selesai_pada);
+        $this->assertNotNull($note->selesai_pada);
+    }
+
+    /**
+     * Test admin can perform CRUD operations on divisions (Bidang).
+     */
+    public function test_admin_can_crud_bidang(): void
+    {
+        $this->withSession(['admin_authenticated' => true]);
+
+        // 1. Create Bidang
+        $response = $this->post(route('admin.bidang.store'), [
+            'nama' => 'Mobile Developer',
+        ]);
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'bidang']));
+        $this->assertDatabaseHas('md_bidang', [
+            'nama' => 'Mobile Developer',
+        ]);
+
+        $bidang = \App\Models\Bidang::where('nama', 'Mobile Developer')->first();
+
+        // 2. Update Bidang
+        $response = $this->post(route('admin.bidang.update', $bidang->id), [
+            'nama' => 'Mobile Apps Developer',
+        ]);
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'bidang']));
+        $this->assertDatabaseHas('md_bidang', [
+            'id' => $bidang->id,
+            'nama' => 'Mobile Apps Developer',
+        ]);
+
+        // 3. Destroy Bidang
+        $response = $this->get(route('admin.bidang.destroy', $bidang->id));
+        $response->assertRedirect(route('admin.dashboard', ['tab' => 'bidang']));
+        $this->assertDatabaseMissing('md_bidang', [
+            'id' => $bidang->id,
+        ]);
+    }
 }

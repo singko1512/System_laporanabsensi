@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Bidang;
 use App\Models\Absensi;
 use App\Models\Pengaturan;
 use App\Models\JadwalMingguan;
@@ -118,6 +119,8 @@ class AdminController extends Controller
             ->orderBy('tanggal_mulai', 'desc')
             ->get();
 
+        $bidangs = Bidang::orderBy('nama', 'asc')->get();
+
         return view('admin.dashboard', compact(
             'users',
             'magangUsers',
@@ -129,6 +132,7 @@ class AdminController extends Controller
             'noteCategories',
             'absensiRecords',
             'projects',
+            'bidangs',
             'month',
             'year',
             'search',
@@ -373,5 +377,59 @@ class AdminController extends Controller
 
         $pdf = Pdf::loadView('admin.rekap_pdf', compact('rekapData', 'month', 'year', 'namaBulan', 'totalWorkdays'));
         return $pdf->download("Rekap_Absensi_{$namaBulan}_{$year}.pdf");
+    }
+
+    public function storeBidang(Request $request)
+    {
+        $request->validate([
+            'nama' => 'required|string|max:100|unique:md_bidang,nama',
+        ], [
+            'nama.required' => 'Nama bidang wajib diisi.',
+            'nama.unique' => 'Nama bidang sudah ada.',
+        ]);
+
+        Bidang::create([
+            'nama' => trim($request->input('nama')),
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Bidang baru berhasil ditambahkan!');
+    }
+
+    public function updateBidang(Request $request, $id)
+    {
+        $bidang = Bidang::findOrFail($id);
+
+        $request->validate([
+            'nama' => 'required|string|max:100|unique:md_bidang,nama,' . $id,
+        ], [
+            'nama.required' => 'Nama bidang wajib diisi.',
+            'nama.unique' => 'Nama bidang sudah ada.',
+        ]);
+
+        $oldName = $bidang->nama;
+        $newName = trim($request->input('nama'));
+
+        $bidang->update([
+            'nama' => $newName,
+        ]);
+
+        User::where('bidang_magang', $oldName)->update([
+            'bidang_magang' => $newName,
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Nama bidang berhasil diperbarui!');
+    }
+
+    public function destroyBidang($id)
+    {
+        $bidang = Bidang::findOrFail($id);
+
+        User::where('bidang_magang', $bidang->nama)->update([
+            'bidang_magang' => null,
+        ]);
+
+        $bidang->delete();
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Bidang berhasil dihapus!');
     }
 }

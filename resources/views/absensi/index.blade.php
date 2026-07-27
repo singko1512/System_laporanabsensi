@@ -639,17 +639,27 @@
             <form action="{{ route('absensi.index') }}" method="GET" id="rekapFilterForm">
                 <input type="hidden" name="tab" value="rekap">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label>Peserta Magang</label>
-                        <select name="user_id" class="form-select form-select-premium py-2">
-                            <option value="">Semua peserta magang</option>
-                            @foreach ($users as $u)
-                                <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }}</option>
+                    <div class="col-md-3">
+                        <label>Bidang Magang</label>
+                        <select name="bidang_magang" id="rekap_bidang_magang" class="form-select form-select-premium py-2">
+                            <option value="">-- Pilih Bidang --</option>
+                            @foreach ($bidangList as $b)
+                                <option value="{{ $b }}" {{ request('bidang_magang') == $b ? 'selected' : '' }}>{{ $b }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label>Peserta Magang</label>
+                        <select name="user_id" id="rekap_user_id" class="form-select form-select-premium py-2" disabled>
+                            <option value="" data-bidang="">Pilih bidang terlebih dahulu</option>
+                            @foreach ($users as $u)
+                                <option value="{{ $u->id }}" data-bidang="{{ $u->bidang_magang }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
                         <label>Periode</label>
                         <select name="filter_type" id="filter_type" class="form-select form-select-premium py-2">
                             <option value="all" {{ $filterType == 'all' ? 'selected' : '' }}>Semua waktu</option>
@@ -658,17 +668,17 @@
                         </select>
                     </div>
 
-                    <div class="col-md-4 filter-extra {{ $filterType === 'date' ? 'show' : '' }}" id="dateFilter">
+                    <div class="col-md-3 filter-extra {{ $filterType === 'date' ? 'show' : '' }}" id="dateFilter">
                         <label>Tanggal</label>
                         <input type="date" name="date" class="form-control form-control-premium py-2" value="{{ request('date') }}">
                     </div>
 
-                    <div class="col-md-4 filter-extra {{ $filterType === 'month' ? 'show' : '' }}" id="monthFilter">
+                    <div class="col-md-3 filter-extra {{ $filterType === 'month' ? 'show' : '' }}" id="monthFilter">
                         <label>Bulan</label>
                         <input type="month" name="month_filter" class="form-control form-control-premium py-2" value="{{ request('month_filter', date('Y-m')) }}">
                     </div>
 
-                    <div class="col-md-4 ms-auto">
+                    <div class="col-md-3 ms-auto">
                         <button type="submit" class="btn btn-premium-primary w-100 py-2">
                             <i class="fa-solid fa-filter me-1"></i> Terapkan Filter
                         </button>
@@ -796,12 +806,21 @@
             <form action="{{ route('absensi.index') }}" method="GET">
                 <input type="hidden" name="tab" value="timeline">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-8">
+                    <div class="col-md-4">
+                        <label>Bidang Magang</label>
+                        <select name="bidang_magang" id="timeline_bidang_magang" class="form-select form-select-premium py-2">
+                            <option value="">-- Pilih Bidang --</option>
+                            @foreach ($bidangList as $b)
+                                <option value="{{ $b }}" {{ request('bidang_magang') == $b ? 'selected' : '' }}>{{ $b }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label>Peserta Magang</label>
-                        <select name="user_id" class="form-select form-select-premium py-2" required>
-                            <option value="" disabled {{ request('user_id') ? '' : 'selected' }}>Pilih nama untuk melihat timeline...</option>
+                        <select name="user_id" id="timeline_user_id" class="form-select form-select-premium py-2" required disabled>
+                            <option value="" disabled {{ request('user_id') ? '' : 'selected' }}>Pilih bidang terlebih dahulu</option>
                             @foreach ($users as $u)
-                                <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
+                                <option value="{{ $u->id }}" data-bidang="{{ $u->bidang_magang }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
                                     {{ $u->nama }}{{ $u->email ? ' - ' . $u->email : '' }}
                                 </option>
                             @endforeach
@@ -883,7 +902,7 @@
                                         @endforeach
                                     </div>
                                     @forelse ($activeDayNotes as $note)
-                                        <span class="note-chip note-{{ $note->kategori }}">
+                                        <span class="note-chip note-{{ $note->kategori }} {{ $note->user_selesai_pada ? 'note-done' : '' }}">
                                             @if ($note->user)
                                                 <span class="d-block" style="font-size:0.64rem;font-weight:800;opacity:0.8;">
                                                     <i class="fa-solid fa-user me-1"></i>{{ \Illuminate\Support\Str::limit($note->user->nama, 18) }}
@@ -925,6 +944,10 @@
                                     @if ($note->selesai_pada)
                                         <span class="stat-pill" style="background:rgba(16,185,129,0.1);color:#047857;">
                                             Selesai {{ $note->selesai_pada->timezone(config('app.timezone'))->format('d M H:i') }}
+                                        </span>
+                                    @elseif ($note->user_selesai_pada)
+                                        <span class="stat-pill" style="background:rgba(245,158,11,0.1);color:#b45309;">
+                                            <i class="fa-regular fa-clock me-1"></i> Menunggu Konfirmasi
                                         </span>
                                     @elseif ($note->user_id && (int) $note->user_id !== (int) $timelineUser->id)
                                         <span class="text-muted" style="font-size:0.76rem;">Note peserta lain</span>
@@ -1186,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (attendanceForm) {
         attendanceForm.addEventListener('submit', function(e) {
             const checked = document.querySelector('input[name="status"]:checked');
-            const needsCamera = checked && ['hadir', 'wfh'].includes(checked.value);
+            const needsCamera = checked && ['hadir'].includes(checked.value);
             const needsLocation = checked && checked.value === 'wfh';
 
             if (needsCamera && (!fotoKameraInput || fotoKameraInput.files.length === 0)) {
@@ -1195,11 +1218,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Foto kamera belum diambil',
-                        text: 'Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir atau WFH.',
+                        text: 'Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir.',
                         confirmButtonColor: '#6c5ce7'
                     });
                 } else {
-                    alert('Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir atau WFH.');
+                    alert('Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir.');
                 }
                 return;
             }
@@ -1237,22 +1260,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (fotoInput) fotoInput.required = m[1];
         if (laporanLabel) laporanLabel.innerHTML = m[2] + ' <span class="text-danger">*</span>';
         if (laporanInput) laporanInput.placeholder = m[3];
-        if (['hadir', 'wfh'].includes(v)) {
+        if (['hadir'].includes(v)) {
             if (cameraSection) cameraSection.style.display = 'block';
             if (!cameraStream && cameraPanel) cameraPanel.style.display = 'none';
             if (!cameraStream && cameraStartActions) cameraStartActions.style.display = 'flex';
             if (cameraLabel) {
-                cameraLabel.innerHTML = (v === 'wfh' ? 'Foto Aktivitas WFH' : 'Foto Kamera') + ' <span class="text-danger">*</span>';
+                cameraLabel.innerHTML = 'Foto Kamera <span class="text-danger">*</span>';
             }
             if (cameraStartMessage) {
-                cameraStartMessage.innerText = v === 'wfh'
-                    ? 'Ambil foto laptop, layar kerja, meja kerja, atau catatan project sebagai bukti aktivitas.'
-                    : 'Nyalakan kamera lalu ambil foto untuk absensi hadir.';
+                cameraStartMessage.innerText = 'Nyalakan kamera lalu ambil foto untuk absensi hadir.';
             }
             if (cameraMessage) {
-                cameraMessage.innerText = v === 'wfh'
-                    ? 'Kamera aktif. Arahkan ke bukti aktivitas kerja, lalu klik Ambil Foto.'
-                    : 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
+                cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
             }
         } else {
             if (cameraSection) cameraSection.style.display = 'none';
@@ -1295,6 +1314,106 @@ document.addEventListener('DOMContentLoaded', function() {
     filterType?.addEventListener('change', toggleFilterFields);
     toggleFilterFields();
 
+    // Rekap tab: Bidang filter to user_id dropdown
+    const bidangSelect = document.getElementById('rekap_bidang_magang');
+    const userSelect = document.getElementById('rekap_user_id');
+    if (bidangSelect && userSelect) {
+        const allUserOptions = Array.from(userSelect.querySelectorAll('option')).map(opt => ({
+            value: opt.value,
+            text: opt.textContent,
+            bidang: opt.getAttribute('data-bidang') || ''
+        }));
+
+        function updateUsers() {
+            const selectedBidang = bidangSelect.value;
+            userSelect.innerHTML = '';
+
+            if (!selectedBidang) {
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Pilih bidang terlebih dahulu';
+                userSelect.appendChild(placeholder);
+                userSelect.disabled = true;
+            } else {
+                userSelect.disabled = false;
+                
+                // Add "Semua peserta magang" option
+                const allOpt = document.createElement('option');
+                allOpt.value = '';
+                allOpt.textContent = 'Semua peserta magang';
+                userSelect.appendChild(allOpt);
+
+                // Add matching users
+                const selectedUserId = "{{ request('user_id') }}";
+                allUserOptions.forEach(opt => {
+                    if (opt.bidang === selectedBidang) {
+                        const newOpt = document.createElement('option');
+                        newOpt.value = opt.value;
+                        newOpt.textContent = opt.text;
+                        if (opt.value === selectedUserId) {
+                            newOpt.selected = true;
+                        }
+                        userSelect.appendChild(newOpt);
+                    }
+                });
+            }
+        }
+
+        bidangSelect.addEventListener('change', updateUsers);
+        updateUsers();
+    }
+
+    // Timeline tab: Bidang filter to user_id dropdown
+    const timelineBidangSelect = document.getElementById('timeline_bidang_magang');
+    const timelineUserSelect = document.getElementById('timeline_user_id');
+    if (timelineBidangSelect && timelineUserSelect) {
+        const allTimelineUserOptions = Array.from(timelineUserSelect.querySelectorAll('option')).map(opt => ({
+            value: opt.value,
+            text: opt.textContent,
+            bidang: opt.getAttribute('data-bidang') || ''
+        }));
+
+        function updateTimelineUsers() {
+            const selectedBidang = timelineBidangSelect.value;
+            timelineUserSelect.innerHTML = '';
+
+            if (!selectedBidang) {
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Pilih bidang terlebih dahulu';
+                placeholder.disabled = true;
+                placeholder.selected = true;
+                timelineUserSelect.appendChild(placeholder);
+                timelineUserSelect.disabled = true;
+            } else {
+                timelineUserSelect.disabled = false;
+                
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = 'Pilih nama untuk melihat timeline...';
+                placeholder.disabled = true;
+                placeholder.selected = !("{{ request('user_id') }}");
+                timelineUserSelect.appendChild(placeholder);
+
+                // Add matching users
+                const selectedUserId = "{{ request('user_id') }}";
+                allTimelineUserOptions.forEach(opt => {
+                    if (opt.bidang === selectedBidang) {
+                        const newOpt = document.createElement('option');
+                        newOpt.value = opt.value;
+                        newOpt.textContent = opt.text;
+                        if (opt.value === selectedUserId) {
+                            newOpt.selected = true;
+                        }
+                        timelineUserSelect.appendChild(newOpt);
+                    }
+                });
+            }
+        }
+
+        timelineBidangSelect.addEventListener('change', updateTimelineUsers);
+        updateTimelineUsers();
+    }
 
 });
 </script>

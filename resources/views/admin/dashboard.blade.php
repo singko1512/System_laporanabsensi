@@ -442,6 +442,9 @@
             <button type="button" class="tab-btn" data-tab="timeline">
                 <i class="fa-solid fa-chart-gantt"></i> Timeline Project
             </button>
+            <button type="button" class="tab-btn" data-tab="bidang">
+                <i class="fa-solid fa-layer-group"></i> Kelola Bidang
+            </button>
         </div>
     </div>
 
@@ -917,7 +920,7 @@
                                         @endforeach
                                     </div>
                                     @forelse ($activeDayNotes as $note)
-                                        <span class="note-chip note-{{ $note->kategori }}">
+                                        <span class="note-chip note-{{ $note->kategori }} {{ $note->user_selesai_pada ? 'note-done' : '' }}">
                                             @if ($note->user)
                                                 <span class="d-block" style="font-size:0.64rem;font-weight:800;opacity:0.8;">
                                                     <i class="fa-solid fa-user me-1"></i>{{ \Illuminate\Support\Str::limit($note->user->nama, 18) }}
@@ -959,12 +962,21 @@
                                     @if ($note->selesai_pada)
                                         <span class="monitor-pill">Selesai {{ $note->selesai_pada->timezone(config('app.timezone'))->format('d M H:i') }}</span>
                                     @else
-                                        <form action="{{ route('timeline.note.complete', $note) }}" method="POST">
-                                            @csrf
-                                            <button type="submit" class="btn-action" title="Tandai selesai">
-                                                <i class="fa-solid fa-check"></i>
-                                            </button>
-                                        </form>
+                                        @if ($note->user_id && !$note->user_selesai_pada)
+                                            <span class="text-muted small"><i class="fa-solid fa-hourglass-start me-1"></i>Belum diselesaikan user</span>
+                                        @else
+                                            <div class="d-flex align-items-center gap-2">
+                                                @if ($note->user_selesai_pada)
+                                                    <span class="badge bg-warning text-dark small me-1">Perlu Konfirmasi</span>
+                                                @endif
+                                                <form action="{{ route('timeline.note.complete', $note) }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn-action" title="Tandai selesai">
+                                                        <i class="fa-solid fa-check"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        @endif
                                     @endif
                                 </div>
                             @endforeach
@@ -977,6 +989,56 @@
                     <p>Buat project pertama dari form di atas.</p>
                 </div>
             @endforelse
+        </div>
+    </div>
+
+    {{-- TAB: Kelola Bidang --}}
+    <div class="tab-panel d-none" id="panel-bidang">
+        <div class="admin-card overflow-hidden">
+            <div class="p-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h6 class="fw-bold mb-0" style="color:var(--dark);">
+                    <i class="fa-solid fa-layer-group me-1" style="color:var(--primary);"></i> Daftar Bidang Magang
+                </h6>
+                <button type="button" class="btn-add" data-bs-toggle="modal" data-bs-target="#addBidangModal">
+                    <i class="fa-solid fa-plus"></i> Tambah Bidang
+                </button>
+            </div>
+
+            @if ($bidangs->isEmpty())
+                <div class="empty-state">
+                    <h6>Belum ada bidang magang terdaftar</h6>
+                    <p>Tambahkan bidang magang baru untuk dapat memilihnya saat mendaftarkan anak magang.</p>
+                </div>
+            @else
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width:10%;">No</th>
+                                <th>Nama Bidang</th>
+                                <th style="width:20%;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $bidangRowNumber = 1; @endphp
+                            @foreach ($bidangs as $b)
+                                <tr>
+                                    <td class="text-muted fw-semibold">{{ $bidangRowNumber++ }}</td>
+                                    <td class="fw-semibold" style="color:var(--dark);">{{ $b->nama }}</td>
+                                    <td>
+                                        <button type="button" class="btn-action me-1" onclick="editBidang({{ $b->id }}, {{ json_encode($b->nama) }})" title="Edit">
+                                            <i class="fa-solid fa-pen"></i>
+                                        </button>
+                                        <a href="#" class="btn-action danger" onclick="confirmDelBidang(event, '{{ route('admin.bidang.destroy', $b->id) }}')" title="Hapus">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
         </div>
     </div>
 </div>
@@ -1002,8 +1064,13 @@
                         <input type="text" name="pembimbing_magang" class="form-control form-control-admin w-100" placeholder="Nama pembimbing">
                     </div>
                     <div class="col-sm-6">
-                        <label class="form-label-admin">Bidang Magang</label>
-                        <input type="text" name="bidang_magang" class="form-control form-control-admin w-100" placeholder="Contoh: Backend Developer">
+                        <label class="form-label-admin">Bidang Magang <span class="text-danger">*</span></label>
+                        <select name="bidang_magang" class="form-select form-control-admin w-100" required>
+                            <option value="" disabled selected>Pilih bidang...</option>
+                            @foreach ($bidangs as $b)
+                                <option value="{{ $b->nama }}">{{ $b->nama }}</option>
+                            @endforeach
+                        </select>
                     </div>
                 </div>
                 <div class="row g-3 mb-4">
@@ -1046,8 +1113,13 @@
                         <input type="text" name="pembimbing_magang" id="e_pembimbing_magang" class="form-control form-control-admin w-100" placeholder="Nama pembimbing">
                     </div>
                     <div class="col-sm-6">
-                        <label class="form-label-admin">Bidang Magang</label>
-                        <input type="text" name="bidang_magang" id="e_bidang_magang" class="form-control form-control-admin w-100" placeholder="Contoh: Backend Developer">
+                        <label class="form-label-admin">Bidang Magang <span class="text-danger">*</span></label>
+                        <select name="bidang_magang" id="e_bidang_magang" class="form-select form-control-admin w-100" required>
+                            <option value="" disabled>Pilih bidang...</option>
+                            @foreach ($bidangs as $b)
+                                <option value="{{ $b->nama }}">{{ $b->nama }}</option>
+                            @endforeach
+                        </select>
                     </div>
                 </div>
                 <div class="row g-3 mb-4">
@@ -1234,6 +1306,46 @@
         </div>
     </div>
 </div>
+
+{{-- Modal: Tambah Bidang --}}
+<div class="modal fade modal-clean" id="addBidangModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content p-4">
+            <h5 class="fw-bold mb-3"><i class="fa-solid fa-layer-group me-2" style="color:var(--primary);"></i>Tambah Bidang Magang</h5>
+            <form action="{{ route('admin.bidang.store') }}" method="POST">
+                @csrf
+                <div class="mb-4">
+                    <label class="form-label-admin">Nama Bidang <span class="text-danger">*</span></label>
+                    <input type="text" name="nama" class="form-control form-control-admin w-100" placeholder="Contoh: Backend Developer" required>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn-add flex-grow-1 justify-content-center">Simpan</button>
+                    <button type="button" class="btn-logout" data-bs-dismiss="modal">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- Modal: Edit Bidang --}}
+<div class="modal fade modal-clean" id="editBidangModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content p-4">
+            <h5 class="fw-bold mb-3"><i class="fa-solid fa-pen me-2" style="color:var(--primary);"></i>Edit Bidang Magang</h5>
+            <form action="" method="POST" id="editBidangForm">
+                @csrf
+                <div class="mb-4">
+                    <label class="form-label-admin">Nama Bidang <span class="text-danger">*</span></label>
+                    <input type="text" name="nama" id="eb_nama" class="form-control form-control-admin w-100" placeholder="Contoh: Backend Developer" required>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn-add flex-grow-1 justify-content-center">Simpan</button>
+                    <button type="button" class="btn-logout" data-bs-dismiss="modal">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
@@ -1245,6 +1357,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pegawai: document.getElementById('panel-pegawai'),
         jadwal: document.getElementById('panel-jadwal'),
         timeline: document.getElementById('panel-timeline'),
+        bidang: document.getElementById('panel-bidang'),
     };
 
     function switchTab(name) {
@@ -1573,6 +1686,28 @@ function confirmAttendanceDelete(e, form) {
         customClass: { popup: 'rounded-4 border-0 shadow-lg', confirmButton: 'rounded-3', cancelButton: 'rounded-3' }
     }).then(r => { if (r.isConfirmed) form.submit(); });
     return false;
+}
+
+function editBidang(id, nama) {
+    const form = document.getElementById('editBidangForm');
+    form.action = "{{ url('admin/bidang/update') }}/" + id;
+    document.getElementById('eb_nama').value = nama;
+    new bootstrap.Modal(document.getElementById('editBidangModal')).show();
+}
+
+function confirmDelBidang(e, url) {
+    e.preventDefault();
+    Swal.fire({
+        title: 'Hapus bidang magang?',
+        text: 'Bidang ini akan dihapus. Peserta magang di bidang ini akan diset tanpa bidang.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'Hapus',
+        cancelButtonText: 'Batal',
+        customClass: { popup: 'rounded-4 border-0 shadow-lg', confirmButton: 'rounded-3', cancelButton: 'rounded-3' }
+    }).then(r => { if (r.isConfirmed) window.location.href = url; });
 }
 </script>
 @endsection

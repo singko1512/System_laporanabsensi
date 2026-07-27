@@ -32,6 +32,11 @@ Route::middleware(['admin'])->group(function () {
     Route::get('/admin/pegawai/hapus/{id}', [AdminController::class, 'destroyUser'])->name('admin.user.destroy');
     Route::post('/admin/absensi/hapus/{absensi}', [AdminController::class, 'destroyAbsensi'])->name('admin.absensi.destroy');
 
+    // CRUD Kelola Bidang (md_bidang)
+    Route::post('/admin/bidang/tambah', [AdminController::class, 'storeBidang'])->name('admin.bidang.store');
+    Route::post('/admin/bidang/update/{id}', [AdminController::class, 'updateBidang'])->name('admin.bidang.update');
+    Route::get('/admin/bidang/hapus/{id}', [AdminController::class, 'destroyBidang'])->name('admin.bidang.destroy');
+
     Route::post('/admin/jadwal/simpan', [AdminController::class, 'updateSchedules'])->name('admin.jadwal.update');
     Route::post('/admin/jadwal/acak', [AdminController::class, 'randomizeSchedules'])->name('admin.jadwal.random');
 

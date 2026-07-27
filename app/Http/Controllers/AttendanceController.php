@@ -50,6 +50,8 @@ class AttendanceController extends Controller
         $users = User::orderBy('nama', 'asc')->get();
         $absensiStatuses = MasterData::options(MasterData::ABSENSI_STATUS);
 
+        $bidangList = \App\Models\Bidang::orderBy('nama', 'asc')->pluck('nama');
+
         // Determine active tab
         $activeTab = $request->input('tab', 'form');
 
@@ -63,6 +65,14 @@ class AttendanceController extends Controller
 
         $filterType = $request->input('filter_type', 'all');
         $userId = $request->input('user_id');
+        $bidangMagang = $request->input('bidang_magang');
+        if ($userId && !$bidangMagang) {
+            $tempUser = User::find($userId);
+            if ($tempUser) {
+                $bidangMagang = $tempUser->bidang_magang;
+                $request->merge(['bidang_magang' => $bidangMagang]);
+            }
+        }
         $timelineUser = null;
         $timelineProjects = collect();
 
@@ -85,6 +95,10 @@ class AttendanceController extends Controller
             if ($userId) {
                 $selectedUser = User::findOrFail($userId);
                 $absensiQuery->where('user_id', $userId);
+            } elseif ($bidangMagang) {
+                $absensiQuery->whereHas('user', function ($query) use ($bidangMagang) {
+                    $query->where('bidang_magang', $bidangMagang);
+                });
             }
 
             $absensi = $absensiQuery->orderBy('tanggal', 'desc')->orderBy('created_at', 'desc')->get();
@@ -126,6 +140,7 @@ class AttendanceController extends Controller
 
         return view('absensi.index', compact(
             'users',
+            'bidangList',
             'activeTab',
             'selectedUser',
             'absensi',
@@ -150,7 +165,7 @@ class AttendanceController extends Controller
                     ->where(fn ($query) => $query->where('jenis', MasterData::ABSENSI_STATUS)->where('is_active', true)),
             ],
             'foto' => 'required_if:status,sakit|image|mimes:jpg,jpeg,png,webp|max:5120',
-            'foto_kamera' => 'required_if:status,hadir,wfh|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'foto_kamera' => 'required_if:status,hadir|image|mimes:jpg,jpeg,png,webp|max:5120',
             'lokasi_latitude' => 'required_if:status,wfh|nullable|numeric|between:-90,90',
             'lokasi_longitude' => 'required_if:status,wfh|nullable|numeric|between:-180,180',
             'lokasi_akurasi' => 'nullable|numeric|min:0|max:99999',
@@ -163,7 +178,7 @@ class AttendanceController extends Controller
             'foto.image' => 'Berkas harus berupa gambar (JPG, PNG, JPEG, WEBP).',
             'foto.mimes' => 'Berkas harus berupa gambar JPG, JPEG, PNG, atau WEBP.',
             'foto.max' => 'Ukuran berkas maksimal 5 MB.',
-            'foto_kamera.required_if' => 'Foto kamera wajib diambil untuk status Hadir dan WFH.',
+            'foto_kamera.required_if' => 'Foto kamera wajib diambil untuk status Hadir.',
             'foto_kamera.image' => 'Foto kamera harus berupa gambar (JPG, PNG, JPEG, WEBP).',
             'foto_kamera.mimes' => 'Foto kamera harus berupa gambar JPG, JPEG, PNG, atau WEBP.',
             'foto_kamera.max' => 'Ukuran foto kamera maksimal 5 MB.',

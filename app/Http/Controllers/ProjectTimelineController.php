@@ -204,11 +204,15 @@ class ProjectTimelineController extends Controller
             if (! $isProjectMember) {
                 abort(403);
             }
-        }
 
-        $note->update([
-            'selesai_pada' => now(config('app.timezone')),
-        ]);
+            $note->update([
+                'user_selesai_pada' => now(config('app.timezone')),
+            ]);
+        } else {
+            $note->update([
+                'selesai_pada' => now(config('app.timezone')),
+            ]);
+        }
 
         if ($request->input('redirect_tab') === 'timeline') {
             return redirect()->route('absensi.index', [
