@@ -59,15 +59,16 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
         $endDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
 
         $users = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+            $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                ->with('statusMaster');
         }])->orderBy('nama', 'asc')->get();
 
         $rows = [
-            ['REKAPITULASI ABSENSI PEGAWAI'],
+            ['REKAPITULASI ABSENSI PESERTA MAGANG'],
             ['Bulan / Tahun', $this->namaBulan . ' ' . $this->year],
             ['Hari Kerja Efektif', $this->totalWorkdays . ' Hari'],
             ['Tanggal Cetak', Carbon::now()->translatedFormat('d F Y, H:i') . ' WIB'],
-            ['No', 'Nama Pegawai', 'Email', 'Hadir', 'WFH', 'Sakit', 'Izin', 'Persentase Kehadiran'],
+            ['No', 'Nama Peserta Magang', 'NIP / ID', 'Pembimbing Magang', 'Bidang Magang', 'Hadir', 'WFH', 'Sakit', 'Izin', 'Persentase Kehadiran'],
         ];
 
         $no = 1;
@@ -81,7 +82,9 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
             $rows[] = [
                 $no++,
                 $user->nama,
-                $user->email ?? '-',
+                $user->nip_atau_id ?? '-',
+                $user->pembimbing_magang ?? '-',
+                $user->bidang_magang ?? '-',
                 $hadir,
                 $wfh,
                 $sakit,
@@ -100,17 +103,17 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
                 $sheet = $event->sheet->getDelegate();
                 $lastRow = max($sheet->getHighestRow(), $this->headerRow);
 
-                $sheet->mergeCells('A1:H1');
+                $sheet->mergeCells('A1:J1');
                 $sheet->getStyle('A1')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => '1E293B']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                 ]);
 
-                $sheet->getStyle('A2:B3')->applyFromArray([
+                $sheet->getStyle('A2:B4')->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['rgb' => '475569']],
                 ]);
 
-                $sheet->getStyle('A5:H' . $lastRow)->applyFromArray([
+                $sheet->getStyle('A5:J' . $lastRow)->applyFromArray([
                     'borders' => [
                         'allBorders' => [
                             'borderStyle' => Border::BORDER_THIN,
@@ -119,7 +122,7 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
                     ],
                 ]);
 
-                $sheet->getStyle('A5:H5')->applyFromArray([
+                $sheet->getStyle('A5:J5')->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                     'fill' => [
                         'fillType' => Fill::FILL_SOLID,
@@ -133,11 +136,11 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
 
                 if ($lastRow >= $this->dataStartRow) {
                     $sheet->getStyle('A' . $this->dataStartRow . ':A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle('D' . $this->dataStartRow . ':H' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle('F' . $this->dataStartRow . ':J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                     for ($row = $this->dataStartRow; $row <= $lastRow; $row++) {
                         if ($row % 2 === 0) {
-                            $sheet->getStyle('A' . $row . ':H' . $row)->applyFromArray([
+                            $sheet->getStyle('A' . $row . ':J' . $row)->applyFromArray([
                                 'fill' => [
                                     'fillType' => Fill::FILL_SOLID,
                                     'startColor' => ['rgb' => 'F8FAFC'],

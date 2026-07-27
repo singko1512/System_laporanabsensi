@@ -5,31 +5,25 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Absensi extends Model
+class Project extends Model
 {
     use HasFactory;
 
-    protected $table = 'md_absensi';
+    protected $table = 'md_projects';
 
     protected $fillable = [
         'user_id',
-        'tanggal',
+        'nama',
+        'kebutuhan',
+        'tanggal_mulai',
+        'tanggal_selesai',
         'status',
         'status_id',
-        'foto',
-        'foto_kamera',
-        'lokasi_latitude',
-        'lokasi_longitude',
-        'lokasi_akurasi',
-        'lokasi_diambil_pada',
-        'laporan',
     ];
 
     protected $casts = [
-        'lokasi_latitude' => 'decimal:7',
-        'lokasi_longitude' => 'decimal:7',
-        'lokasi_akurasi' => 'decimal:2',
-        'lokasi_diambil_pada' => 'datetime',
+        'tanggal_mulai' => 'date',
+        'tanggal_selesai' => 'date',
     ];
 
     public function user()
@@ -40,6 +34,22 @@ class Absensi extends Model
     public function statusMaster()
     {
         return $this->belongsTo(MasterData::class, 'status_id');
+    }
+
+    public function members()
+    {
+        return $this->belongsToMany(User::class, 'md_project_user', 'project_id', 'user_id')
+            ->withTimestamps();
+    }
+
+    public function dayAssignments()
+    {
+        return $this->hasMany(ProjectDayAssignment::class, 'project_id');
+    }
+
+    public function notes()
+    {
+        return $this->hasMany(ProjectNote::class, 'project_id');
     }
 
     public function getStatusAttribute($value): ?string
@@ -55,7 +65,7 @@ class Absensi extends Model
     public function setStatusAttribute(?string $value): void
     {
         if ($value) {
-            $this->attributes['status_id'] = MasterData::idFor(MasterData::ABSENSI_STATUS, $value);
+            $this->attributes['status_id'] = MasterData::idFor(MasterData::PROJECT_STATUS, $value);
         }
     }
 }

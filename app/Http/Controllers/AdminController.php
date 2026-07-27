@@ -6,7 +6,10 @@ use App\Models\User;
 use App\Models\Absensi;
 use App\Models\Pengaturan;
 use App\Models\JadwalMingguan;
+use App\Models\MasterData;
+use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -52,7 +55,38 @@ class AdminController extends Controller
     public function dashboard(Request $request)
     {
         $users = User::with('jadwalMingguan')->orderBy('nama', 'asc')->get();
+        $magangSearch = trim((string) $request->input('magang_search', ''));
+        $pembimbingMagang = trim((string) $request->input('pembimbing_magang', ''));
 
+        $pembimbingOptions = User::query()
+            ->whereNotNull('pembimbing_magang')
+            ->where('pembimbing_magang', '<>', '')
+            ->select('pembimbing_magang')
+            ->distinct()
+            ->orderBy('pembimbing_magang')
+            ->pluck('pembimbing_magang');
+
+        $magangQuery = User::query()->orderBy('pembimbing_magang')->orderBy('nama');
+
+        if ($magangSearch !== '') {
+            $magangQuery->where(function ($query) use ($magangSearch) {
+                $query->where('nama', 'like', '%' . $magangSearch . '%')
+                    ->orWhere('email', 'like', '%' . $magangSearch . '%')
+                    ->orWhere('bidang_magang', 'like', '%' . $magangSearch . '%')
+                    ->orWhere('pembimbing_magang', 'like', '%' . $magangSearch . '%');
+            });
+        }
+
+        if ($pembimbingMagang !== '') {
+            $magangQuery->where('pembimbing_magang', $pembimbingMagang);
+        }
+
+        $magangUsers = $magangQuery->get();
+        $magangGroups = $magangUsers->groupBy(fn (User $user) => $user->pembimbing_magang ?: 'Belum ada pembimbing');
+        $absensiStatuses = MasterData::options(MasterData::ABSENSI_STATUS);
+        $jadwalStatuses = MasterData::options(MasterData::JADWAL_STATUS);
+        $projectStatuses = MasterData::options(MasterData::PROJECT_STATUS);
+        $noteCategories = MasterData::options(MasterData::NOTE_KATEGORI);
         $month = (int) $request->input('month', Carbon::now()->month);
         $year = (int) $request->input('year', Carbon::now()->year);
         $search = $request->input('search', '');
@@ -61,7 +95,7 @@ class AdminController extends Controller
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
         $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth();
 
-        $absensiQuery = Absensi::with('user')
+        $absensiQuery = Absensi::with(['user', 'statusMaster'])
             ->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->orderBy('tanggal', 'desc')
             ->orderBy('created_at', 'desc');
@@ -73,45 +107,72 @@ class AdminController extends Controller
         }
 
         if ($status !== '' && $status !== 'all') {
-            $absensiQuery->where('status', $status);
+            $statusId = MasterData::idFor(MasterData::ABSENSI_STATUS, $status);
+            $absensiQuery->where('status_id', $statusId);
         }
 
         $absensiRecords = $absensiQuery->get();
+        $selesaiProjectStatusId = MasterData::idFor(MasterData::PROJECT_STATUS, 'selesai');
+        $projects = Project::with(['user', 'members', 'statusMaster', 'notes.user', 'notes.kategoriMaster', 'dayAssignments.user'])
+            ->orderByRaw('status_id = ? asc', [$selesaiProjectStatusId])
+            ->orderBy('tanggal_mulai', 'desc')
+            ->get();
 
         return view('admin.dashboard', compact(
             'users',
+            'magangUsers',
+            'magangGroups',
+            'pembimbingOptions',
+            'absensiStatuses',
+            'jadwalStatuses',
+            'projectStatuses',
+            'noteCategories',
             'absensiRecords',
+            'projects',
             'month',
             'year',
             'search',
-            'status'
+            'status',
+            'magangSearch',
+            'pembimbingMagang'
         ));
     }
 
     /**
-     * Store new employee (User).
+     * Store new internship participant (User).
      */
     public function storeUser(Request $request)
     {
         $request->validate([
             'nama' => 'required|string|max:100',
             'email' => 'nullable|email|max:100|unique:md_user,email',
+            'pembimbing_magang' => 'nullable|string|max:100',
+            'bidang_magang' => 'nullable|string|max:100',
+            'tanggal_mulai_magang' => 'nullable|date',
+            'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
         ], [
-            'nama.required' => 'Nama pegawai wajib diisi.',
+            'nama.required' => 'Nama peserta magang wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
+            'tanggal_mulai_magang.date' => 'Tanggal mulai magang tidak valid.',
+            'tanggal_selesai_magang.date' => 'Tanggal selesai magang tidak valid.',
+            'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
         ]);
 
         User::create([
             'nama' => $request->input('nama'),
             'email' => $request->input('email'),
+            'pembimbing_magang' => $request->input('pembimbing_magang'),
+            'bidang_magang' => $request->input('bidang_magang'),
+            'tanggal_mulai_magang' => $request->input('tanggal_mulai_magang'),
+            'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
         ])->jadwalMingguan()->create(JadwalMingguan::defaultSchedule());
 
-        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Pegawai baru berhasil ditambahkan!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Peserta magang baru berhasil ditambahkan!');
     }
 
     /**
-     * Update employee (User) details.
+     * Update internship participant (User) details.
      */
     public function updateUser(Request $request, $id)
     {
@@ -120,29 +181,71 @@ class AdminController extends Controller
         $request->validate([
             'nama' => 'required|string|max:100',
             'email' => 'nullable|email|max:100|unique:md_user,email,' . $id,
+            'pembimbing_magang' => 'nullable|string|max:100',
+            'bidang_magang' => 'nullable|string|max:100',
+            'tanggal_mulai_magang' => 'nullable|date',
+            'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
         ], [
-            'nama.required' => 'Nama pegawai wajib diisi.',
+            'nama.required' => 'Nama peserta magang wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
+            'tanggal_mulai_magang.date' => 'Tanggal mulai magang tidak valid.',
+            'tanggal_selesai_magang.date' => 'Tanggal selesai magang tidak valid.',
+            'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
         ]);
 
         $user->update([
             'nama' => $request->input('nama'),
             'email' => $request->input('email'),
+            'pembimbing_magang' => $request->input('pembimbing_magang'),
+            'bidang_magang' => $request->input('bidang_magang'),
+            'tanggal_mulai_magang' => $request->input('tanggal_mulai_magang'),
+            'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Data pegawai berhasil diperbarui!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Data peserta magang berhasil diperbarui!');
     }
 
     /**
-     * Delete employee (User).
+     * Delete internship participant (User).
      */
     public function destroyUser($id)
     {
         $user = User::findOrFail($id);
         $user->delete(); // automatically cascades absensi deletion due to DB schema constraint
 
-        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Pegawai berhasil dihapus!');
+        return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Peserta magang berhasil dihapus!');
+    }
+
+    /**
+     * Delete an incorrect attendance record and its attachment.
+     */
+    public function destroyAbsensi(Request $request, Absensi $absensi)
+    {
+        $foto = $absensi->foto;
+        $fotoKamera = $absensi->foto_kamera;
+        $absensi->delete();
+
+        foreach ([$foto, $fotoKamera] as $path) {
+            if (! $path) {
+                continue;
+            }
+
+            $uploadsRoot = realpath(public_path('uploads'));
+            $filePath = realpath(public_path($path));
+
+            if ($uploadsRoot && $filePath && str_starts_with($filePath, $uploadsRoot . DIRECTORY_SEPARATOR) && File::isFile($filePath)) {
+                File::delete($filePath);
+            }
+        }
+
+        return redirect()->route('admin.dashboard', [
+            'tab' => 'rekap',
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+            'search' => $request->input('search'),
+            'status' => $request->input('status'),
+        ])->with('success_swal', 'Data absensi berhasil dihapus.');
     }
 
     /**
@@ -151,6 +254,7 @@ class AdminController extends Controller
     public function updateSchedules(Request $request)
     {
         $weekdays = ['senin', 'selasa', 'rabu', 'kamis'];
+        $allowedStatuses = MasterData::codes(MasterData::JADWAL_STATUS);
         $schedules = $request->input('schedules', []);
 
         foreach ($schedules as $userId => $schedule) {
@@ -161,7 +265,7 @@ class AdminController extends Controller
 
             $data = ['jumat' => 'wfh'];
             foreach ($weekdays as $day) {
-                $data[$day] = in_array($schedule[$day] ?? 'wfo', ['wfo', 'wfh'], true)
+                $data[$day] = in_array($schedule[$day] ?? 'wfo', $allowedStatuses, true)
                     ? $schedule[$day]
                     : 'wfo';
             }
@@ -183,7 +287,7 @@ class AdminController extends Controller
         $users = User::orderBy('nama', 'asc')->get();
 
         if ($users->isEmpty()) {
-            return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('error_swal', 'Belum ada pegawai untuk diacak jadwalnya.');
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('error_swal', 'Belum ada peserta magang untuk diacak jadwalnya.');
         }
 
         $shuffled = $users->shuffle();
@@ -197,7 +301,7 @@ class AdminController extends Controller
             );
         });
 
-        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal berhasil diacak! Jumat tetap WFH untuk semua pegawai.');
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal berhasil diacak! Jumat tetap WFH untuk semua peserta magang.');
     }
 
     /**
@@ -241,6 +345,7 @@ class AdminController extends Controller
 
         $employeesWithAbsensi = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
             $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                  ->with('statusMaster')
                   ->orderBy('tanggal', 'asc');
         }])->orderBy('nama', 'asc')->get();
 

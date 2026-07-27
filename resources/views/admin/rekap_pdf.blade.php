@@ -97,7 +97,7 @@
 
     <!-- Report Header -->
     <div class="header">
-        <h2>Laporan Rekapitulasi Absensi Pegawai</h2>
+        <h2>Laporan Rekapitulasi Absensi Peserta Magang</h2>
         <p>Sistem Laporan Absensi Harian Terintegrasi - AbsensiKita</p>
     </div>
 
@@ -124,13 +124,15 @@
         <thead>
             <tr>
                 <th width="5%">No</th>
-                <th width="35%">Nama Pegawai</th>
-                <th width="20%">Email</th>
-                <th width="8%">Hadir</th>
-                <th width="8%">WFH</th>
-                <th width="8%">Sakit</th>
-                <th width="8%">Izin</th>
-                <th width="13%">Persentase</th>
+                <th width="22%">Nama Peserta</th>
+                <th width="11%">NIP / ID</th>
+                <th width="14%">Pembimbing</th>
+                <th width="14%">Bidang</th>
+                <th width="7%">Hadir</th>
+                <th width="7%">WFH</th>
+                <th width="7%">Sakit</th>
+                <th width="7%">Izin</th>
+                <th width="6%">Persentase</th>
             </tr>
         </thead>
         <tbody>
@@ -138,7 +140,9 @@
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td class="font-bold">{{ $data->user->nama }}</td>
-                    <td>{{ $data->user->email ?? '-' }}</td>
+                    <td>{{ $data->user->nip_atau_id ?? '-' }}</td>
+                    <td>{{ $data->user->pembimbing_magang ?? '-' }}</td>
+                    <td>{{ $data->user->bidang_magang ?? '-' }}</td>
                     <td class="text-center">{{ $data->hadir }}</td>
                     <td class="text-center">{{ $data->wfh }}</td>
                     <td class="text-center">{{ $data->sakit }}</td>

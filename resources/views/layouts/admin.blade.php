@@ -396,6 +396,27 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function installInspectGuards() {
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
+
+            document.addEventListener('keydown', function(e) {
+                const key = e.key.toLowerCase();
+                const blocked =
+                    e.key === 'F12' ||
+                    (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+                    (e.ctrlKey && ['u', 's'].includes(key));
+
+                if (blocked) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            });
+        }
+
+        installInspectGuards();
         @if (session('success_swal'))
             Swal.fire({ icon:'success', title:'Berhasil', text:"{{ session('success_swal') }}", confirmButtonColor:'#6366f1', timer:3000, customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
         @endif

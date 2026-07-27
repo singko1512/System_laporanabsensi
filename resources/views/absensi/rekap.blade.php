@@ -152,12 +152,23 @@
                             <div class="row align-items-start g-2">
                                 <div class="col">
                                     <p class="text-muted small mb-1" style="line-height:1.6;">{{ $rec->laporan }}</p>
-                                    <span class="text-muted" style="font-size:0.72rem;"><i class="fa-regular fa-clock me-1"></i>{{ $rec->created_at->format('H:i') }} WIB</span>
+                                    <span class="text-muted" style="font-size:0.72rem;"><i class="fa-regular fa-clock me-1"></i>{{ $rec->created_at->timezone(config('app.timezone'))->format('H:i') }} WIB</span>
                                 </div>
+                                @if ($rec->foto_kamera)
+                                <div class="col-auto">
+                                    @php $kameraUrl = route('absensi.kamera', $rec); @endphp
+                                    <a href="{{ $kameraUrl }}" target="_blank" class="d-block rounded-3 overflow-hidden border text-decoration-none" style="width:64px;height:64px;" title="Foto kamera">
+                                        <img src="{{ $kameraUrl }}" class="w-100 h-100 object-fit-cover" alt="Foto Kamera" onerror="this.classList.add('d-none'); this.nextElementSibling.classList.remove('d-none'); this.nextElementSibling.style.display='flex';">
+                                        <span class="d-none w-100 h-100 align-items-center justify-content-center text-primary" style="font-size:0.7rem;"><i class="fa-solid fa-camera"></i></span>
+                                    </a>
+                                </div>
+                                @endif
                                 @if ($rec->foto)
                                 <div class="col-auto">
-                                    <a href="{{ asset($rec->foto) }}" target="_blank" class="d-block rounded-3 overflow-hidden border" style="width:64px;height:64px;">
-                                        <img src="{{ asset($rec->foto) }}" class="w-100 h-100 object-fit-cover" alt="Bukti">
+                                    @php $lampiranUrl = route('absensi.lampiran', $rec); @endphp
+                                    <a href="{{ $lampiranUrl }}" target="_blank" class="d-block rounded-3 overflow-hidden border text-decoration-none" style="width:64px;height:64px;">
+                                        <img src="{{ $lampiranUrl }}" class="w-100 h-100 object-fit-cover" alt="Bukti" onerror="this.classList.add('d-none'); this.nextElementSibling.classList.remove('d-none'); this.nextElementSibling.style.display='flex';">
+                                        <span class="d-none w-100 h-100 align-items-center justify-content-center text-primary" style="font-size:0.7rem;"><i class="fa-regular fa-image"></i></span>
                                     </a>
                                 </div>
                                 @endif
@@ -171,7 +182,7 @@
                 <div class="glass-card p-5 text-center">
                     <i class="fa-regular fa-hand fs-1 d-block mb-3 text-primary opacity-50"></i>
                     <h5 class="fw-bold">Selamat datang</h5>
-                    <p class="text-muted small col-md-7 mx-auto">Pilih nama pegawai di atas untuk melihat statistik kehadiran dan riwayat laporan kerja harian.</p>
+                    <p class="text-muted small col-md-7 mx-auto">Pilih nama peserta magang di atas untuk melihat statistik kehadiran dan riwayat laporan kerja harian.</p>
                 </div>
             @endif
         </div>
