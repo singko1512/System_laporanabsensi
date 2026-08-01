@@ -8,10 +8,19 @@ use App\Models\Absensi;
 use App\Models\Pengaturan;
 use App\Models\JadwalMingguan;
 use App\Models\MasterData;
+use App\Models\PembimbingMagang;
 use App\Models\Project;
+use App\Models\ProjectModule;
+use App\Models\ProjectTask;
+use App\Models\ActivityLog;
+use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AbsensiExport;
@@ -19,26 +28,34 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class AdminController extends Controller
 {
-    /**
-     * Handle Admin PIN Verification.
-     */
-    public function login(Request $request)
+    public function showAdminLogin()
     {
-        $request->validate([
-            'pin' => 'required|string',
-        ], [
-            'pin.required' => 'PIN Admin wajib diisi.',
+        return redirect()->route('login.form', ['role' => 'admin']);
+    }
+
+    public function showSuperAdminLogin()
+    {
+        return redirect()->route('login.form', ['role' => 'superadmin']);
+    }
+
+    public function loginAdmin(Request $request)
+    {
+        return $this->loginWithRole($request, 'admin');
+    }
+
+    public function loginSuperAdmin(Request $request)
+    {
+        return $this->loginWithRole($request, 'superadmin');
+    }
+
+    private function loginWithRole(Request $request, string $role)
+    {
+        $request->merge([
+            'login' => $request->input('login', $request->input('username')),
+            'expected_role' => $role,
         ]);
 
-        $pin = $request->input('pin');
-        $pengaturan = Pengaturan::where('kunci', 'pin_admin')->first();
-
-        if ($pengaturan && Hash::check($pin, $pengaturan->nilai)) {
-            session(['admin_authenticated' => true]);
-            return redirect()->route('admin.dashboard')->with('success_swal', 'Login Admin Berhasil!');
-        }
-
-        return redirect()->back()->with('error_swal', 'PIN Admin salah atau tidak valid.');
+        return app(AuthController::class)->login($request);
     }
 
     /**
@@ -46,8 +63,7 @@ class AdminController extends Controller
      */
     public function logout()
     {
-        session()->forget('admin_authenticated');
-        return redirect()->route('home')->with('success_swal', 'Logout berhasil.');
+        return app(AuthController::class)->logout(request());
     }
 
     /**
@@ -55,19 +71,26 @@ class AdminController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $users = User::with('jadwalMingguan')->orderBy('nama', 'asc')->get();
+        $adminRole = Auth::user()->role;
+        $isSuperAdmin = $adminRole === 'superadmin';
+        $activeAdminTab = (string) $request->input('tab', $isSuperAdmin ? 'rekap' : 'pegawai');
+        $allowedTabs = $isSuperAdmin
+            ? ['rekap', 'pegawai', 'jadwal', 'timeline', 'sertifikat', 'bidang']
+            : ['pegawai', 'sertifikat'];
+
+        if (! in_array($activeAdminTab, $allowedTabs, true)) {
+            return redirect()
+                ->route('admin.dashboard', ['tab' => $allowedTabs[0]])
+                ->with('error_swal', 'Role Anda tidak memiliki akses ke menu tersebut.');
+        }
+
+        $users = User::with(['jadwalMingguan', 'bidang', 'pembimbingMagang'])->where('role', 'user')->orderBy('nama', 'asc')->get();
         $magangSearch = trim((string) $request->input('magang_search', ''));
         $pembimbingMagang = trim((string) $request->input('pembimbing_magang', ''));
 
-        $pembimbingOptions = User::query()
-            ->whereNotNull('pembimbing_magang')
-            ->where('pembimbing_magang', '<>', '')
-            ->select('pembimbing_magang')
-            ->distinct()
-            ->orderBy('pembimbing_magang')
-            ->pluck('pembimbing_magang');
+        $pembimbingOptions = PembimbingMagang::with('bidang')->orderBy('nama', 'asc')->get();
 
-        $magangQuery = User::query()->orderBy('pembimbing_magang')->orderBy('nama');
+        $magangQuery = User::with(['bidang', 'pembimbingMagang'])->where('role', 'user')->orderBy('pembimbing_magang')->orderBy('nama');
 
         if ($magangSearch !== '') {
             $magangQuery->where(function ($query) use ($magangSearch) {
@@ -114,14 +137,81 @@ class AdminController extends Controller
 
         $absensiRecords = $absensiQuery->get();
         $selesaiProjectStatusId = MasterData::idFor(MasterData::PROJECT_STATUS, 'selesai');
-        $projects = Project::with(['user', 'members', 'statusMaster', 'notes.user', 'notes.kategoriMaster', 'dayAssignments.user'])
+        $projects = Project::with([
+                'user',
+                'members',
+                'statusMaster',
+                'notes.user',
+                'notes.kategoriMaster',
+                'dayAssignments.user',
+                'modules.tasks.user',
+                'tasks.user',
+            ])
             ->orderByRaw('status_id = ? asc', [$selesaiProjectStatusId])
             ->orderBy('tanggal_mulai', 'desc')
             ->get();
 
         $bidangs = Bidang::orderBy('nama', 'asc')->get();
+        $pembimbingMagangs = $pembimbingOptions;
+        $sertifikatUsers = User::query()
+            ->where('role', 'user')
+            ->orderByRaw('tanggal_selesai_magang is null asc')
+            ->orderBy('tanggal_selesai_magang', 'desc')
+            ->orderBy('nama', 'asc')
+            ->get();
+
+        // 1. Jumlah Project, Module, Task
+        $projectCount = Project::count();
+        $moduleCount = ProjectModule::count();
+        $taskCount = ProjectTask::count();
+
+        // 2. Project Aktif & Selesai
+        $selesaiStatusId = \App\Models\MasterData::idFor(\App\Models\MasterData::PROJECT_STATUS, 'selesai');
+        $projectAktifCount = Project::where(function($q) use ($selesaiStatusId) {
+            $q->whereNull('status_id')->orWhere('status_id', '!=', $selesaiStatusId);
+        })->count();
+
+        $projectSelesaiCount = Project::where('status_id', $selesaiStatusId)->count();
+
+        // 3. Task Menunggu Review & Terlambat
+        $taskReviewCount = ProjectTask::where('status', 'review')->count();
+        $taskTerlambatCount = ProjectTask::where('status', '!=', 'selesai')
+            ->where('tanggal_selesai', '<', now()->toDateString())
+            ->count();
+
+        // 4. Peserta Magang Aktif
+        $pesertaAktifCount = User::where('role', 'user')->where('status_akun', 'aktif')->count();
+
+        // 5. Statistik Kehadiran Hari Ini
+        $todayAbsens = Absensi::with('statusMaster')->where('tanggal', now()->toDateString())->get();
+        $hadirCount = 0;
+        $wfhCount = 0;
+        $sakitCount = 0;
+        $izinCount = 0;
+        foreach ($todayAbsens as $abs) {
+            $code = strtolower($abs->statusMaster?->kode ?? $abs->status ?? '');
+            if (in_array($code, ['hadir', 'wfo', 'wfo (hadir)'], true)) {
+                $hadirCount++;
+            } elseif ($code === 'wfh') {
+                $wfhCount++;
+            } elseif ($code === 'sakit') {
+                $sakitCount++;
+            } elseif ($code === 'izin') {
+                $izinCount++;
+            }
+        }
+        $belumAbsenCount = max(0, $pesertaAktifCount - $todayAbsens->count());
+
+        // 6. Activity Log
+        $activityLogs = ActivityLog::with(['user', 'project'])
+            ->orderBy('created_at', 'desc')
+            ->take(50)
+            ->get();
 
         return view('admin.dashboard', compact(
+            'adminRole',
+            'isSuperAdmin',
+            'activeAdminTab',
             'users',
             'magangUsers',
             'magangGroups',
@@ -133,12 +223,29 @@ class AdminController extends Controller
             'absensiRecords',
             'projects',
             'bidangs',
+            'pembimbingMagangs',
+            'sertifikatUsers',
             'month',
             'year',
             'search',
             'status',
             'magangSearch',
-            'pembimbingMagang'
+            'pembimbingMagang',
+            // Data statistik baru
+            'projectCount',
+            'moduleCount',
+            'taskCount',
+            'projectAktifCount',
+            'projectSelesaiCount',
+            'taskReviewCount',
+            'taskTerlambatCount',
+            'pesertaAktifCount',
+            'hadirCount',
+            'wfhCount',
+            'sakitCount',
+            'izinCount',
+            'belumAbsenCount',
+            'activityLogs'
         ));
     }
 
@@ -149,27 +256,51 @@ class AdminController extends Controller
     {
         $request->validate([
             'nama' => 'required|string|max:100',
-            'email' => 'nullable|email|max:100|unique:md_user,email',
-            'pembimbing_magang' => 'nullable|string|max:100',
-            'bidang_magang' => 'nullable|string|max:100',
+            'username' => 'nullable|string|max:100|unique:md_user,username',
+            'email' => 'required|email|max:100|unique:md_user,email',
+            'password' => 'required|string|min:6',
+            'pembimbing_magang_id' => [
+                'required',
+                Rule::exists('md_pembimbing_magang', 'id')
+                    ->where(fn ($query) => $query->where('bidang_id', $request->input('bidang_id'))),
+            ],
+            'bidang_id' => 'required|exists:md_bidang,id',
             'tanggal_mulai_magang' => 'nullable|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
+            'status_akun' => 'required|in:aktif,nonaktif',
         ], [
             'nama.required' => 'Nama peserta magang wajib diisi.',
+            'username.unique' => 'Username sudah dipakai.',
+            'email.required' => 'Email peserta magang wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
+            'password.required' => 'Password peserta magang wajib diisi.',
+            'password.min' => 'Password minimal 6 karakter.',
+            'pembimbing_magang_id.required' => 'Pembimbing magang wajib dipilih.',
+            'pembimbing_magang_id.exists' => 'Pembimbing magang tidak sesuai dengan bidang yang dipilih.',
+            'bidang_id.required' => 'Bidang magang wajib dipilih.',
+            'bidang_id.exists' => 'Bidang magang tidak valid.',
             'tanggal_mulai_magang.date' => 'Tanggal mulai magang tidak valid.',
             'tanggal_selesai_magang.date' => 'Tanggal selesai magang tidak valid.',
             'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
         ]);
 
+        $bidang = Bidang::findOrFail($request->input('bidang_id'));
+        $pembimbing = PembimbingMagang::findOrFail($request->input('pembimbing_magang_id'));
+
         User::create([
             'nama' => $request->input('nama'),
+            'username' => $request->input('username') ?: $this->generateUsername($request->input('nama'), $request->input('email')),
             'email' => $request->input('email'),
-            'pembimbing_magang' => $request->input('pembimbing_magang'),
-            'bidang_magang' => $request->input('bidang_magang'),
+            'password' => $request->input('password'),
+            'pembimbing_magang_id' => $pembimbing->id,
+            'pembimbing_magang' => $pembimbing->nama,
+            'bidang_id' => $bidang->id,
+            'bidang_magang' => $bidang->nama,
             'tanggal_mulai_magang' => $request->input('tanggal_mulai_magang'),
             'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
+            'role' => 'user',
+            'status_akun' => $request->input('status_akun', 'aktif'),
         ])->jadwalMingguan()->create(JadwalMingguan::defaultSchedule());
 
         return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Peserta magang baru berhasil ditambahkan!');
@@ -184,28 +315,55 @@ class AdminController extends Controller
 
         $request->validate([
             'nama' => 'required|string|max:100',
-            'email' => 'nullable|email|max:100|unique:md_user,email,' . $id,
-            'pembimbing_magang' => 'nullable|string|max:100',
-            'bidang_magang' => 'nullable|string|max:100',
+            'username' => 'nullable|string|max:100|unique:md_user,username,' . $id,
+            'email' => 'required|email|max:100|unique:md_user,email,' . $id,
+            'password' => 'nullable|string|min:6',
+            'pembimbing_magang_id' => [
+                'required',
+                Rule::exists('md_pembimbing_magang', 'id')
+                    ->where(fn ($query) => $query->where('bidang_id', $request->input('bidang_id'))),
+            ],
+            'bidang_id' => 'required|exists:md_bidang,id',
             'tanggal_mulai_magang' => 'nullable|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
+            'status_akun' => 'required|in:aktif,nonaktif',
         ], [
             'nama.required' => 'Nama peserta magang wajib diisi.',
+            'username.unique' => 'Username sudah dipakai.',
+            'email.required' => 'Email peserta magang wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
+            'password.min' => 'Password minimal 6 karakter.',
+            'pembimbing_magang_id.required' => 'Pembimbing magang wajib dipilih.',
+            'pembimbing_magang_id.exists' => 'Pembimbing magang tidak sesuai dengan bidang yang dipilih.',
+            'bidang_id.required' => 'Bidang magang wajib dipilih.',
+            'bidang_id.exists' => 'Bidang magang tidak valid.',
             'tanggal_mulai_magang.date' => 'Tanggal mulai magang tidak valid.',
             'tanggal_selesai_magang.date' => 'Tanggal selesai magang tidak valid.',
             'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
         ]);
 
-        $user->update([
+        $bidang = Bidang::findOrFail($request->input('bidang_id'));
+        $pembimbing = PembimbingMagang::findOrFail($request->input('pembimbing_magang_id'));
+
+        $payload = [
             'nama' => $request->input('nama'),
+            'username' => $request->input('username') ?: ($user->username ?: $this->generateUsername($request->input('nama'), $request->input('email'), $user->id)),
             'email' => $request->input('email'),
-            'pembimbing_magang' => $request->input('pembimbing_magang'),
-            'bidang_magang' => $request->input('bidang_magang'),
+            'pembimbing_magang_id' => $pembimbing->id,
+            'pembimbing_magang' => $pembimbing->nama,
+            'bidang_id' => $bidang->id,
+            'bidang_magang' => $bidang->nama,
             'tanggal_mulai_magang' => $request->input('tanggal_mulai_magang'),
             'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
-        ]);
+            'status_akun' => $request->input('status_akun', 'aktif'),
+        ];
+
+        if ($request->filled('password')) {
+            $payload['password'] = $request->input('password');
+        }
+
+        $user->update($payload);
 
         return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Data peserta magang berhasil diperbarui!');
     }
@@ -250,6 +408,69 @@ class AdminController extends Controller
             'search' => $request->input('search'),
             'status' => $request->input('status'),
         ])->with('success_swal', 'Data absensi berhasil dihapus.');
+    }
+
+    public function uploadSertifikat(Request $request, User $user)
+    {
+        $request->validate([
+            'sertifikat_file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
+        ], [
+            'sertifikat_file.required' => 'File sertifikat wajib dipilih.',
+            'sertifikat_file.mimes' => 'Sertifikat harus berupa PDF, JPG, JPEG, PNG, atau WEBP.',
+            'sertifikat_file.max' => 'Ukuran sertifikat maksimal 10 MB.',
+        ]);
+
+        if ($user->sertifikat_file_path) {
+            Storage::disk('local')->delete($user->sertifikat_file_path);
+        }
+
+        $file = $request->file('sertifikat_file');
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'pdf');
+        $filename = 'sertifikat_' . $user->id . '_' . now(config('app.timezone'))->format('Ymd_His') . '_' . Str::random(8) . '.' . $extension;
+        $path = $file->storeAs('sertifikat', $filename, 'local');
+
+        $user->update([
+            'sertifikat_file_path' => $path,
+            'sertifikat_file_name' => $file->getClientOriginalName(),
+            'sertifikat_file_mime' => $file->getMimeType(),
+            'sertifikat_diunggah_pada' => now(config('app.timezone')),
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'sertifikat'])
+            ->with('success_swal', 'Sertifikat ' . $user->nama . ' berhasil diunggah.');
+    }
+
+    public function viewSertifikat(User $user)
+    {
+        if (! $user->sertifikat_file_path || ! Storage::disk('local')->exists($user->sertifikat_file_path)) {
+            abort(404);
+        }
+
+        $filePath = Storage::disk('local')->path($user->sertifikat_file_path);
+        $fileName = $user->sertifikat_file_name ?: basename($user->sertifikat_file_path);
+        $mime = $user->sertifikat_file_mime ?: 'application/octet-stream';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"',
+        ]);
+    }
+
+    public function destroySertifikat(User $user)
+    {
+        if ($user->sertifikat_file_path) {
+            Storage::disk('local')->delete($user->sertifikat_file_path);
+        }
+
+        $user->update([
+            'sertifikat_file_path' => null,
+            'sertifikat_file_name' => null,
+            'sertifikat_file_mime' => null,
+            'sertifikat_diunggah_pada' => null,
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'sertifikat'])
+            ->with('success_swal', 'File sertifikat berhasil dihapus.');
     }
 
     /**
@@ -415,6 +636,7 @@ class AdminController extends Controller
 
         User::where('bidang_magang', $oldName)->update([
             'bidang_magang' => $newName,
+            'bidang_id' => $bidang->id,
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Nama bidang berhasil diperbarui!');
@@ -425,11 +647,98 @@ class AdminController extends Controller
         $bidang = Bidang::findOrFail($id);
 
         User::where('bidang_magang', $bidang->nama)->update([
+            'bidang_id' => null,
             'bidang_magang' => null,
         ]);
 
         $bidang->delete();
 
         return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Bidang berhasil dihapus!');
+    }
+
+    public function storePembimbing(Request $request)
+    {
+        $request->validate([
+            'nama' => 'required|string|max:100|unique:md_pembimbing_magang,nama',
+            'bidang_id' => 'required|exists:md_bidang,id',
+        ], [
+            'nama.required' => 'Nama pembimbing wajib diisi.',
+            'nama.unique' => 'Nama pembimbing sudah ada.',
+            'bidang_id.required' => 'Bidang magang wajib dipilih.',
+            'bidang_id.exists' => 'Bidang magang tidak valid.',
+        ]);
+
+        PembimbingMagang::create([
+            'nama' => trim($request->input('nama')),
+            'bidang_id' => $request->input('bidang_id'),
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Pembimbing magang baru berhasil ditambahkan!');
+    }
+
+    public function updatePembimbing(Request $request, $id)
+    {
+        $pembimbing = PembimbingMagang::findOrFail($id);
+
+        $request->validate([
+            'nama' => 'required|string|max:100|unique:md_pembimbing_magang,nama,' . $id,
+            'bidang_id' => 'required|exists:md_bidang,id',
+        ], [
+            'nama.required' => 'Nama pembimbing wajib diisi.',
+            'nama.unique' => 'Nama pembimbing sudah ada.',
+            'bidang_id.required' => 'Bidang magang wajib dipilih.',
+            'bidang_id.exists' => 'Bidang magang tidak valid.',
+        ]);
+
+        $oldName = $pembimbing->nama;
+        $newName = trim($request->input('nama'));
+
+        $pembimbing->update([
+            'nama' => $newName,
+            'bidang_id' => $request->input('bidang_id'),
+        ]);
+
+        User::where('pembimbing_magang', $oldName)->update([
+            'pembimbing_magang_id' => $pembimbing->id,
+            'pembimbing_magang' => $newName,
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Nama pembimbing berhasil diperbarui!');
+    }
+
+    public function destroyPembimbing($id)
+    {
+        $pembimbing = PembimbingMagang::findOrFail($id);
+
+        User::where('pembimbing_magang', $pembimbing->nama)->update([
+            'pembimbing_magang_id' => null,
+            'pembimbing_magang' => null,
+        ]);
+
+        $pembimbing->delete();
+
+        return redirect()->route('admin.dashboard', ['tab' => 'bidang'])->with('success_swal', 'Pembimbing magang berhasil dihapus!');
+    }
+
+    private function generateUsername(string $name, string $email, ?int $ignoreUserId = null): string
+    {
+        $base = Str::of(Str::before($email, '@') ?: $name)
+            ->lower()
+            ->replaceMatches('/[^a-z0-9._-]+/', '.')
+            ->trim('.-_')
+            ->value();
+
+        $base = $base !== '' ? $base : 'peserta';
+        $username = $base;
+        $counter = 1;
+
+        while (User::where('username', $username)
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '<>', $ignoreUserId))
+            ->exists()) {
+            $username = $base . $counter;
+            $counter++;
+        }
+
+        return $username;
     }
 }

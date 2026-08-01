@@ -252,21 +252,30 @@
                         <i class="fa-regular fa-pen-to-square"></i> Absensi
                     </a>
                 </li>
-                @if(session('admin_authenticated'))
+                @if(auth()->check())
                     <li>
-                        <a href="{{ route('admin.dashboard') }}" class="@if(Route::is('admin.dashboard')) active @endif">
-                            <i class="fa-solid fa-gauge-high"></i> Dashboard
-                        </a>
+                        @if(in_array(auth()->user()->role, ['admin', 'superadmin'], true))
+                            <a href="{{ route('admin.dashboard') }}" class="@if(Route::is('admin.dashboard')) active @endif">
+                                <i class="fa-solid fa-gauge-high"></i> {{ auth()->user()->role === 'superadmin' ? 'Super Admin' : 'Admin' }}
+                            </a>
+                        @else
+                            <a href="{{ route('absensi.index') }}" class="@if(Route::is('absensi.index')) active @endif">
+                                <i class="fa-regular fa-user"></i> {{ auth()->user()->nama }}
+                            </a>
+                        @endif
                     </li>
                     <li>
-                        <a href="{{ route('admin.logout') }}" style="color: var(--rose);">
-                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Keluar
-                        </a>
+                        <form action="{{ route('logout') }}" method="POST" class="m-0">
+                            @csrf
+                            <button type="submit" style="color: var(--rose);border:0;background:transparent;display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 0.9rem;border-radius:10px;font-size:0.85rem;font-weight:600;">
+                                <i class="fa-solid fa-arrow-right-from-bracket"></i> Keluar
+                            </button>
+                        </form>
                     </li>
                 @else
                     <li>
-                        <a href="javascript:void(0)" onclick="triggerAdminLogin()">
-                            <i class="fa-solid fa-lock"></i> Admin
+                        <a href="{{ route('login.form') }}">
+                            <i class="fa-solid fa-lock"></i> Login
                         </a>
                     </li>
                 @endif
@@ -286,12 +295,14 @@
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body d-flex flex-column gap-2">
-            <a href="{{ route('absensi.index') }}" class="btn btn-outline-dark rounded-3 text-start"><i class="fa-regular fa-pen-to-square me-2"></i> Menu Absensi</a>
-            @if(session('admin_authenticated'))
-                <a href="{{ route('admin.dashboard') }}" class="btn btn-dark rounded-3 text-start"><i class="fa-solid fa-gauge-high me-2"></i> Dashboard Admin</a>
-                <a href="{{ route('admin.logout') }}" class="btn btn-outline-danger rounded-3 text-start"><i class="fa-solid fa-arrow-right-from-bracket me-2"></i> Keluar</a>
+            @if(auth()->check())
+                <a href="{{ auth()->user()->role === 'user' ? route('absensi.index') : route('admin.dashboard') }}" class="btn btn-dark rounded-3 text-start"><i class="fa-solid fa-gauge-high me-2"></i> Dashboard</a>
+                <form action="{{ route('logout') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-danger rounded-3 text-start w-100"><i class="fa-solid fa-arrow-right-from-bracket me-2"></i> Keluar</button>
+                </form>
             @else
-                <button onclick="triggerAdminLogin()" class="btn btn-outline-dark rounded-3 text-start"><i class="fa-solid fa-lock me-2"></i> Admin Panel</button>
+                <a href="{{ route('login.form') }}" class="btn btn-outline-dark rounded-3 text-start"><i class="fa-solid fa-lock me-2"></i> Login Akun</a>
             @endif
         </div>
     </div>
@@ -331,53 +342,6 @@
         }
 
         installInspectGuards();
-
-        function triggerAdminLogin() {
-            Swal.fire({
-                title: 'Verifikasi Admin',
-                text: 'Masukkan PIN 6-digit untuk mengakses panel administrator',
-                input: 'password',
-                inputAttributes: {
-                    autocapitalize: 'off',
-                    autocorrect: 'off',
-                    placeholder: '••••••',
-                    maxlength: '20',
-                    style: 'text-align:center; letter-spacing:0.6rem; font-size:1.5rem; font-weight:700; border-radius:14px; border:1px solid #eef0f6; padding:1rem;'
-                },
-                showCancelButton: true,
-                confirmButtonText: 'Masuk',
-                cancelButtonText: 'Batal',
-                confirmButtonColor: '#6c5ce7',
-                cancelButtonColor: '#b2bec3',
-                customClass: {
-                    popup: 'rounded-4 border-0 shadow-lg',
-                    title: 'fw-bold',
-                    confirmButton: 'rounded-3 px-4 py-2',
-                    cancelButton: 'rounded-3 px-4 py-2'
-                },
-                preConfirm: (pin) => {
-                    if (!pin) Swal.showValidationMessage('PIN tidak boleh kosong');
-                    return pin;
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = "{{ route('admin.login') }}";
-
-                    const csrf = document.createElement('input');
-                    csrf.type = 'hidden'; csrf.name = '_token'; csrf.value = "{{ csrf_token() }}";
-                    form.appendChild(csrf);
-
-                    const pin = document.createElement('input');
-                    pin.type = 'hidden'; pin.name = 'pin'; pin.value = result.value;
-                    form.appendChild(pin);
-
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
-        }
 
         @if (session('success_swal'))
             Swal.fire({ icon:'success', title:'Berhasil', text:"{{ session('success_swal') }}", confirmButtonColor:'#6c5ce7', timer:3000, customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });

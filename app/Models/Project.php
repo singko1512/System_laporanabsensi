@@ -52,6 +52,94 @@ class Project extends Model
         return $this->hasMany(ProjectNote::class, 'project_id');
     }
 
+    public function modules()
+    {
+        return $this->hasMany(ProjectModule::class, 'project_id');
+    }
+
+    public function timelines()
+    {
+        return $this->hasMany(ProjectTimeline::class, 'project_id')->orderBy('urutan');
+    }
+
+    public function tasks()
+    {
+        return $this->hasMany(ProjectTask::class, 'project_id');
+    }
+
+    /**
+     * Alias: actual_progress → progress_percentage
+     * Digunakan di view absensi/index.blade.php
+     */
+    public function getActualProgressAttribute(): float
+    {
+        return $this->getProgressPercentageAttribute();
+    }
+
+    /**
+     * Alias: planned_progress → planned_progress_percentage
+     * Digunakan di view absensi/index.blade.php
+     */
+    public function getPlannedProgressAttribute(): float
+    {
+        return $this->getPlannedProgressPercentageAttribute();
+    }
+
+    public function getProgressPercentageAttribute(): float
+    {
+        $modules = $this->modules;
+
+        if ($modules->isEmpty()) {
+            return 0.0;
+        }
+
+        $totalWeight = $modules->sum('bobot');
+        if ($totalWeight > 0) {
+            $sum = 0.0;
+            foreach ($modules as $module) {
+                $sum += ((float) $module->progress) * ((float) $module->bobot) / 100;
+            }
+            return round($sum, 1);
+        }
+
+        return round($modules->sum('progress') / $modules->count(), 1);
+    }
+
+    public function getPlannedProgressPercentageAttribute(): float
+    {
+        $modules = $this->modules;
+
+        if ($modules->isEmpty()) {
+            return 0.0;
+        }
+
+        $today = now()->startOfDay();
+        $totalWeight = $modules->sum('bobot');
+        $sum = 0.0;
+
+        foreach ($modules as $module) {
+            $start = $module->tanggal_mulai ? $module->tanggal_mulai->startOfDay() : null;
+            $end = $module->tanggal_selesai ? $module->tanggal_selesai->startOfDay() : null;
+
+            if (! $start || ! $end) {
+                $plannedModuleProgress = 0.0;
+            } elseif ($today->lt($start)) {
+                $plannedModuleProgress = 0.0;
+            } elseif ($today->gt($end)) {
+                $plannedModuleProgress = 100.0;
+            } else {
+                $totalDays = max(1, $start->diffInDays($end));
+                $elapsedDays = $start->diffInDays($today);
+                $plannedModuleProgress = ($elapsedDays / $totalDays) * 100;
+            }
+
+            $weight = $totalWeight > 0 ? (float) $module->bobot : (100 / $modules->count());
+            $sum += $plannedModuleProgress * $weight / 100;
+        }
+
+        return round(min(100.0, max(0.0, $sum)), 1);
+    }
+
     public function getStatusAttribute($value): ?string
     {
         return $this->statusMaster?->kode ?? $value;

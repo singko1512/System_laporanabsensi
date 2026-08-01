@@ -5,18 +5,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Bidang extends Model
+class PembimbingMagang extends Model
 {
     use HasFactory;
 
-    protected $table = 'md_bidang';
+    protected $table = 'md_pembimbing_magang';
 
     protected $fillable = [
         'nama',
+        'bidang_id',
     ];
 
-    public function pembimbingMagangs()
+    public function bidang()
     {
-        return $this->hasMany(PembimbingMagang::class, 'bidang_id');
+        return $this->belongsTo(Bidang::class, 'bidang_id');
     }
 }

@@ -150,6 +150,28 @@
 
     .card-employee .card-desc { color: rgba(255,255,255,0.8); }
     .card-admin .card-desc { color: var(--text-muted); }
+    .admin-login-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: auto;
+    }
+    .admin-login-actions a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 0.8rem;
+        border-radius: 12px;
+        background: rgba(108, 92, 231, 0.1);
+        color: var(--primary);
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-decoration: none;
+    }
+    .admin-login-actions a:hover {
+        background: rgba(108, 92, 231, 0.16);
+        color: var(--primary);
+    }
 
     .card-cta {
         display: inline-flex;
@@ -321,45 +343,46 @@
     <!-- Two Feature Cards -->
     <div class="feature-grid">
         <!-- Employee Card -->
-        <a href="{{ route('absensi.index') }}" class="feature-card card-employee">
+        <a href="{{ auth()->check() && auth()->user()->role === 'user' ? route('absensi.index') : route('login.form') }}" class="feature-card card-employee">
             <div class="feature-icon">
                 <i class="fa-regular fa-calendar-check"></i>
             </div>
             <div class="card-label">Untuk Peserta Magang</div>
             <div class="card-title">Menu Absensi & Laporan</div>
             <div class="card-desc">
-                Isi absensi harian, unggah foto lokasi, dan kirim laporan pekerjaan Anda.
+                Login akun, isi absensi masuk/pulang, pilih task harian, dan kirim laporan pekerjaan.
             </div>
             <span class="card-cta">Mulai sekarang <i class="fa-solid fa-arrow-right"></i></span>
         </a>
 
         <!-- Admin Card -->
-        @if(session('admin_authenticated'))
+        @if(auth()->check() && in_array(auth()->user()->role, ['admin', 'superadmin'], true))
             <a href="{{ route('admin.dashboard') }}" class="feature-card card-admin">
                 <div class="feature-icon">
                     <i class="fa-regular fa-circle-check"></i>
                 </div>
                 <div class="card-label">Untuk Admin</div>
-                <div class="card-title">Akses Admin</div>
+                <div class="card-title">Akses {{ session('admin_role') === 'superadmin' ? 'Super Admin' : 'Admin' }}</div>
                 <div class="card-desc">
-                    Kelola data peserta magang, pantau rekap, dan ekspor laporan.
-                    Diperlukan PIN 6-digit.
+                    {{ auth()->user()->role === 'superadmin' ? 'Akses penuh untuk rekap, timeline, bidang, magang, dan sertifikat.' : 'Kelola data peserta magang dan sertifikat.' }}
                 </div>
                 <span class="card-cta">Buka Dashboard <i class="fa-solid fa-arrow-right"></i></span>
             </a>
         @else
-            <a href="javascript:void(0)" onclick="triggerAdminLogin()" class="feature-card card-admin">
+            <div class="feature-card card-admin">
                 <div class="feature-icon">
                     <i class="fa-regular fa-circle-check"></i>
                 </div>
                 <div class="card-label">Untuk Admin</div>
-                <div class="card-title">Akses Admin</div>
+                <div class="card-title">Login Akun Sistem</div>
                 <div class="card-desc">
-                    Kelola data peserta magang, pantau rekap, dan ekspor laporan.
-                    Diperlukan PIN 6-digit.
+                    Peserta, Admin, dan Super Admin memakai satu halaman login berbasis akun.
                 </div>
-                <span class="card-cta">Masuk dengan PIN <i class="fa-solid fa-arrow-right"></i></span>
-            </a>
+                <div class="admin-login-actions">
+                    <a href="{{ route('login.form') }}"><i class="fa-solid fa-right-to-bracket"></i> Masuk</a>
+                    <a href="{{ route('login.form', ['mode' => 'register']) }}"><i class="fa-solid fa-user-plus"></i> Register Peserta</a>
+                </div>
+            </div>
         @endif
     </div>
 

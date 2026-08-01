@@ -1,984 +1,916 @@
 @extends('layouts.app')
 
-@section('title', 'Menu Absensi & Laporan')
+@section('title', 'Workspace Magang')
 
 @section('styles')
 <style>
-    /* ── Page Header ── */
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 0;
-        margin-bottom: 1rem;
-    }
-    .page-header-back {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        transition: color 0.2s;
-    }
-    .page-header-back:hover { color: var(--primary); }
-    .page-header-title { text-align: right; }
-    .page-header-title h5 { font-weight: 800; margin: 0; font-size: 1rem; color: var(--dark); }
-    .page-header-title span { font-size: 0.78rem; color: var(--text-muted); }
+:root {
+    --radius: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+}
 
-    /* ── Tab Toggle ── */
-    .tab-toggle {
-        display: flex;
-        max-width: 480px;
-        margin: 0 auto 2rem;
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 100px;
-        padding: 4px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-    }
-    .tab-toggle a {
-        flex: 1;
-        text-align: center;
-        padding: 0.7rem 1rem;
-        font-size: 0.88rem;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-decoration: none;
-        border-radius: 100px;
-        transition: all 0.25s ease;
-    }
-    .tab-toggle a.active {
-        background: linear-gradient(135deg, var(--primary) 0%, #7c6cf0 100%);
-        color: #fff;
-        box-shadow: 0 4px 14px rgba(108, 92, 231, 0.3);
-    }
-    .tab-toggle a:not(.active):hover { color: var(--dark); }
+/* ── Page Layout ── */
+.workspace-header { padding: 1.25rem 0 0.5rem; }
+.workspace-header h5 { font-size: 1.1rem; font-weight: 800; color: var(--dark); margin: 0; }
+.workspace-header span { font-size: 0.78rem; color: var(--text-muted); }
 
-    /* ── Form Card ── */
-    .form-card {
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        padding: 2rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.02);
-        max-width: 680px;
-        margin: 0 auto;
-    }
+/* ── Card Base ── */
+.ws-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+.ws-card-header {
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: #fafbff;
+    border-radius: var(--radius) var(--radius) 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.ws-card-header h6 {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin: 0;
+}
+.ws-card-body { padding: 1.25rem; }
 
-    /* ── Status Selector ── */
-    .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
-    @media (max-width: 480px) { .status-grid { grid-template-columns: 1fr 1fr; } }
+/* ── Project Overview Card ── */
+.project-overview-card {
+    background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+.project-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.status-on-track { background: rgba(16,185,129,0.12); color: #047857; }
+.status-late { background: rgba(239,68,68,0.12); color: #dc2626; }
+.status-ahead { background: rgba(99,102,241,0.12); color: #4f46e5; }
+.progress-bar-slim { height: 6px; border-radius: 999px; background: rgba(0,0,0,0.07); overflow: hidden; }
+.progress-fill { height: 100%; border-radius: inherit; transition: width 0.4s ease; }
 
-    .status-grid > div { display: flex; flex-direction: column; }
-    .status-grid .btn-check { position: absolute; clip: rect(0,0,0,0); pointer-events: none; }
+/* ── Active Task Card ── */
+.task-active-card {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary) !important;
+    border-radius: var(--radius);
+    background: var(--white);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1rem;
+}
 
-    .status-card {
-        border: 1.5px solid var(--border);
-        border-radius: 18px;
-        background: var(--white);
-        padding: 1.25rem 1rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    .status-card:hover { border-color: #d1d5db; background: #fafbff; }
+/* ── Status Badges ── */
+.task-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.task-badge-working { background: rgba(99,102,241,0.1); color: #4f46e5; }
+.task-badge-review { background: rgba(245,158,11,0.12); color: #b45309; }
+.task-badge-revision { background: rgba(239,68,68,0.1); color: #dc2626; }
 
-    .status-card .s-icon {
-        width: 42px; height: 42px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.1rem; margin-bottom: 0.75rem;
-    }
-    .status-card .s-name { font-weight: 700; font-size: 0.92rem; color: var(--dark); }
-    .status-card .s-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+/* ── Available Task Module Header ── */
+.module-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+.module-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: rgba(99,102,241,0.08);
+    color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+.module-title { font-size: 0.88rem; font-weight: 700; color: var(--dark); }
+.module-bobot {
+    font-size: 0.68rem; font-weight: 700;
+    background: rgba(99,102,241,0.08);
+    color: var(--primary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+}
 
-    /* icon colors */
-    .s-icon-hadir { background: rgba(0,184,148,0.1); color: #00b894; }
-    .s-icon-wfh { background: rgba(108,92,231,0.1); color: #6c5ce7; }
-    .s-icon-sakit { background: rgba(225,112,85,0.1); color: #e17055; }
-    .s-icon-izin { background: rgba(253,203,110,0.15); color: #e17055; }
+/* ── Task Item Card ── */
+.task-item {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--white);
+    padding: 1rem;
+    height: 100%;
+    display: flex; flex-direction: column; justify-content: space-between;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.task-item:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.task-item-title { font-size: 0.86rem; font-weight: 700; color: var(--dark); margin-bottom: 0.35rem; }
+.task-item-meta { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.75rem; }
 
-    /* checked state */
-    .btn-check:checked + .status-card { border-color: var(--primary); background: rgba(108,92,231,0.04); box-shadow: 0 0 0 3px rgba(108,92,231,0.1); }
+/* ── Form Presensi ── */
+.presensi-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+.status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.65rem; }
+@media (max-width: 480px) { .status-grid { grid-template-columns: 1fr 1fr; } }
+.status-card {
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    background: var(--white);
+    padding: 1rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; flex-direction: column;
+    align-items: flex-start;
+    height: 100%;
+}
+.status-card:hover { border-color: #c7d2fe; background: #f5f3ff; }
+.btn-check:checked + .status-card { border-color: var(--primary); background: rgba(108,92,231,0.04); box-shadow: 0 0 0 3px rgba(108,92,231,0.1); }
+.s-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 0.6rem; }
+.s-icon-hadir { background: rgba(0,184,148,0.1); color: #00b894; }
+.s-icon-wfh { background: rgba(108,92,231,0.1); color: #6c5ce7; }
+.s-icon-sakit { background: rgba(225,112,85,0.1); color: #e17055; }
+.s-icon-izin { background: rgba(253,203,110,0.15); color: #d97706; }
+.s-name { font-weight: 700; font-size: 0.85rem; color: var(--dark); }
+.s-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
 
-    /* ── Upload Zone ── */
-    .upload-zone {
-        border: 2px dashed var(--border);
-        border-radius: 16px;
-        padding: 1.75rem;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.2s;
-        position: relative;
-        background: #fafbff;
-    }
-    .upload-zone:hover { border-color: var(--primary); background: rgba(108,92,231,0.02); }
-    .upload-zone i.cloud { font-size: 2rem; color: var(--text-light); margin-bottom: 0.5rem; }
-    .upload-zone:hover i.cloud { color: var(--primary); }
-    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-    .file-name { display: none; margin-top: 0.6rem; font-weight: 600; font-size: 0.82rem; color: var(--primary); }
-    .upload-preview {
-        display: none;
-        width: 100%;
-        max-height: 220px;
-        margin-top: 0.85rem;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        object-fit: contain;
-        background: #fff;
-    }
-    .camera-panel {
-        display: none;
-        margin-top: 0.85rem;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        overflow: hidden;
-        background: #0f172a;
-    }
-    .camera-panel video {
-        display: block;
-        width: 100%;
-        max-height: 280px;
-        object-fit: cover;
-        background: #0f172a;
-    }
-    .camera-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.75rem;
-        background: #fff;
-        border-top: 1px solid var(--border);
-    }
-    .camera-message {
-        color: var(--text-muted);
-        font-size: 0.75rem;
-    }
-    .camera-preview {
-        display: none;
-        width: 100%;
-        max-height: 220px;
-        border-top: 1px solid var(--border);
-        object-fit: contain;
-        background: #fff;
-    }
-    .camera-start-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.9rem 1rem;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        background: #fff;
-    }
+/* ── Upload & Camera ── */
+.upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    background: #fafbff;
+}
+.upload-zone:hover { border-color: var(--primary); background: rgba(108,92,231,0.02); }
+.upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.upload-preview { display: none; width: 100%; max-height: 200px; margin-top: 0.85rem; border-radius: 10px; object-fit: contain; }
+.file-name { display: none; margin-top: 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--primary); }
+.camera-panel { display: none; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0f172a; margin-top: 0.85rem; }
+.camera-panel video { display: block; width: 100%; max-height: 260px; object-fit: cover; }
+.camera-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; background: #fff; border-top: 1px solid var(--border); }
+.camera-preview { display: none; width: 100%; max-height: 200px; object-fit: contain; background: #fff; }
+.camera-start-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 14px; background: #fff; margin-top: 0.85rem; }
+.location-panel { display: none; }
+.location-panel.show { display: block; }
+.location-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+.location-pill { border-radius: 999px; background: rgba(108,92,231,0.08); color: var(--primary); font-size: 0.72rem; font-weight: 700; padding: 0.28rem 0.6rem; }
 
-    .location-panel {
-        display: none;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        background: #fff;
-        padding: 1rem;
-    }
-    .location-panel.show { display: block; }
-    .location-status {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-        color: var(--text-muted);
-        font-size: 0.82rem;
-        line-height: 1.45;
-    }
-    .location-status i {
-        color: var(--primary);
-        margin-top: 0.15rem;
-    }
-    .location-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-    }
-    .location-pill {
-        border-radius: 999px;
-        background: rgba(108,92,231,0.08);
-        color: var(--primary);
-        font-size: 0.74rem;
-        font-weight: 700;
-        padding: 0.35rem 0.65rem;
-    }
-    /* ── Submit Button ── */
-    .btn-submit {
-        background: linear-gradient(135deg, var(--primary) 0%, #a29bfe 100%);
-        border: none; color: #fff; font-weight: 700; border-radius: 100px;
-        padding: 1rem; width: 100%; font-size: 1rem;
-        box-shadow: 0 6px 20px rgba(108,92,231,0.25);
-        transition: all 0.25s ease;
-    }
-    .btn-submit:hover { box-shadow: 0 8px 28px rgba(108,92,231,0.35); transform: translateY(-1px); color: #fff; }
+/* ── Stats Widget ── */
+.stat-widget { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 1.25rem; }
+.stat-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-radius: 10px; margin-bottom: 0.4rem; }
+.stat-dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; margin-right: 0.45rem; }
 
-    /* ── Rekap Section ── */
-    .rekap-wrap {
-        max-width: 960px;
-        margin: 0 auto;
-    }
+/* ── History Table ── */
+.history-wrap { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 2rem; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.history-table thead th { background: #f8fafc; color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+.history-table tbody td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.history-table tbody tr:last-child td { border-bottom: none; }
+.history-table tbody tr:hover { background: #fafbff; }
+.badge-status { display: inline-block; padding: 0.28em 0.65em; font-size: 0.68rem; font-weight: 700; border-radius: 7px; text-transform: uppercase; letter-spacing: 0.3px; }
+.badge-hadir { background: rgba(0,184,148,0.1); color: #00b894; }
+.badge-wfh { background: rgba(108,92,231,0.1); color: var(--primary); }
+.badge-sakit { background: rgba(225,112,85,0.1); color: #e17055; }
+.badge-izin { background: rgba(253,203,110,0.15); color: #d97706; }
+.attachment-link { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 600; color: var(--primary); text-decoration: none; }
+.attachment-thumb { width: 36px; height: 36px; border-radius: 7px; object-fit: cover; border: 1px solid var(--border); }
 
-    .filter-bar {
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 1.25rem 1.5rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.02);
-        margin-bottom: 1.25rem;
-    }
-    .filter-bar label {
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-        margin-bottom: 0.4rem;
-        display: block;
-    }
+/* ── Filter Bar ── */
+.filter-bar-wrap { padding: 1.25rem; background: #fafbff; border-bottom: 1px solid var(--border); }
+.filter-extra { display: none; }
+.filter-extra.show { display: block; }
 
-    .stats-grid {
-        display: grid;
-        grid-template-columns: 1.2fr repeat(4, 1fr);
-        gap: 0.75rem;
-        margin-bottom: 1.25rem;
-    }
-    @media (max-width: 768px) {
-        .stats-grid { grid-template-columns: 1fr 1fr; }
-    }
+/* ── Focus Banner ── */
+.focus-banner { border: 1px solid #c7d2fe; border-left: 4px solid var(--primary) !important; background: #f5f3ff; border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1rem; display: flex; align-items: flex-start; gap: 0.75rem; }
+.focus-banner-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(99,102,241,0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-    .stat-card {
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 1.1rem 1.15rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.01);
-    }
+/* ── Empty States ── */
+.empty-state-ws { text-align: center; padding: 2.5rem 1rem; }
+.empty-state-ws .empty-icon { width: 52px; height: 52px; border-radius: 14px; background: rgba(99,102,241,0.06); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 0.75rem; }
+.empty-state-ws h6 { font-weight: 700; color: var(--dark); margin-bottom: 0.3rem; font-size: 0.9rem; }
+.empty-state-ws p { font-size: 0.78rem; color: var(--text-muted); margin: 0; }
 
-    .stat-card.highlight {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        grid-row: span 1;
-    }
+@media (min-width: 992px) { .border-start-lg { border-left: 1px solid var(--border) !important; } }
 
-    .pct-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
-    .pct-ring svg { width: 100%; height: 100%; }
-    .pct-ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
-    .pct-ring-fill { fill: none; stroke: var(--primary); stroke-width: 6; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
-    .pct-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: var(--dark); }
-
-    .stat-value {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: var(--dark);
-        line-height: 1;
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-label {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-        font-weight: 600;
-    }
-
-    .stat-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.68rem;
-        font-weight: 700;
-        padding: 0.25rem 0.55rem;
-        border-radius: 100px;
-        margin-bottom: 0.5rem;
-    }
-
-    .history-card {
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.01);
-    }
-
-    .history-card-header {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--border);
-        background: #fafbff;
-    }
-
-    .rekap-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.85rem;
-    }
-
-    .rekap-table thead th {
-        background: #f1f5f9;
-        color: var(--text-muted);
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 0.85rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .rekap-table tbody td {
-        padding: 0.9rem 1rem;
-        border-bottom: 1px solid var(--border);
-        vertical-align: middle;
-    }
-
-    .rekap-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .rekap-table tbody tr:hover {
-        background: #fafbff;
-    }
-
-    .filter-extra {
-        display: none;
-    }
-
-    .filter-extra.show {
-        display: block;
-    }
-
-
-    .timeline-wrap {
-        max-width: 1080px;
-        margin: 0 auto;
-    }
-
-    .timeline-project {
-        background: var(--white);
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        overflow: hidden;
-        margin-bottom: 1rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.02);
-    }
-
-    .timeline-project-head {
-        padding: 1rem;
-        background: #f8fafc;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .timeline-scroll {
-        overflow-x: auto;
-        padding: 1rem;
-    }
-
-    .timeline-days {
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: 118px;
-        gap: 0.55rem;
-        min-height: 138px;
-    }
-
-    .timeline-day {
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: #fff;
-        padding: 0.7rem;
-        min-height: 128px;
-    }
-
-    .timeline-day.today {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(108,92,231,0.08);
-    }
-
-    .timeline-day-date {
-        font-size: 0.76rem;
-        font-weight: 800;
-        color: var(--dark);
-    }
-
-    .timeline-day-name {
-        color: var(--text-muted);
-        font-size: 0.7rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .note-chip {
-        display: block;
-        width: 100%;
-        border: 0;
-        border-radius: 8px;
-        padding: 0.4rem 0.45rem;
-        margin-top: 0.35rem;
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-align: left;
-        line-height: 1.25;
-    }
-
-    .note-rendah { background: rgba(16,185,129,0.12); color: #047857; }
-    .note-sedang { background: rgba(245,158,11,0.15); color: #b45309; }
-    .note-tinggi { background: rgba(239,68,68,0.12); color: #dc2626; }
-    .note-done { opacity: 0.55; text-decoration: line-through; }
-
-    .assignment-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        max-width: 100%;
-        border-radius: 999px;
-        background: rgba(0,184,148,0.1);
-        color: #047857;
-        font-size: 0.68rem;
-        font-weight: 800;
-        padding: 0.28rem 0.5rem;
-        margin: 0.25rem 0.2rem 0 0;
-    }
-
-    .day-assignments {
-        display: flex;
-        flex-direction: column;
-        gap: 0.28rem;
-        max-height: 62px;
-        overflow-y: auto;
-        padding-right: 0.15rem;
-        margin-bottom: 0.45rem;
-        scrollbar-width: thin;
-        scrollbar-color: #cbd5e1 transparent;
-    }
-
-    .day-assignments .assignment-chip {
-        width: 100%;
-        justify-content: flex-start;
-        margin: 0;
-    }
-
-    .day-assignments:empty {
-        display: none;
-    }
-
-    .day-assignments::-webkit-scrollbar {
-        width: 5px;
-    }
-
-    .day-assignments::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 999px;
-    }
-
-    .note-list {
-        padding: 1rem;
-        border-top: 1px solid var(--border);
-    }
+/* SVG progress ring styling */
+.pct-ring-bg { stroke: #eef2f6; }
+.pct-ring-fill { stroke: var(--primary); transition: stroke-dashoffset 0.35s; transform: rotate(-90deg); transform-origin: 50% 50%; }
 </style>
 @endsection
 
 @section('content')
 <div class="container py-3">
-    <!-- Page Header -->
-    <div class="page-header">
-        <a href="{{ route('home') }}" class="page-header-back">
-            <i class="fa-solid fa-arrow-left"></i> Beranda
-        </a>
-        <div class="page-header-title">
-            <h5>Menu Absensi & Laporan</h5>
-            <span>Isi form atau lihat rekap Anda</span>
-        </div>
+    <!-- Workspace Header -->
+    <div class="workspace-header mb-3">
+        <h5>Workspace Peserta Magang</h5>
+        <span>Kelola tugas harian dan catat kehadiran Anda di satu tempat</span>
     </div>
 
-    <!-- Tab Toggle -->
-    <div class="tab-toggle">
-        <a href="{{ route('absensi.index', ['tab' => 'form']) }}" class="{{ $activeTab === 'form' ? 'active' : '' }}">
-            1. Form Absensi Baru
-        </a>
-        <a href="{{ route('absensi.index', ['tab' => 'rekap']) }}" class="{{ $activeTab === 'rekap' ? 'active' : '' }}">
-            2. Cek Rekap & Status
-        </a>
-        <a href="{{ route('absensi.index', ['tab' => 'timeline']) }}" class="{{ $activeTab === 'timeline' ? 'active' : '' }}">
-            3. Timeline Project
-        </a>
-    </div>
-
-    @if ($activeTab === 'form')
-    {{-- ═══════════════ TAB 1: FORM ABSENSI ═══════════════ --}}
-    <div class="form-card">
-        @if ($errors->any())
-            <div class="alert alert-danger border-0 rounded-3 mb-3 small">
-                <ul class="mb-0">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-            </div>
-        @endif
-
-        <form action="{{ route('absensi.store') }}" method="POST" enctype="multipart/form-data">
-            @csrf
-
-            <!-- Nama Peserta Magang -->
-            <div class="mb-4">
-                <label class="form-label form-label-premium">Nama Peserta Magang</label>
-                <select name="user_id" id="user_id" class="form-select form-select-premium" required>
-                    <option value="" disabled selected>Pilih nama Anda...</option>
-                    @foreach ($users as $user)
-                        <option value="{{ $user->id }}" {{ old('user_id') == $user->id ? 'selected' : '' }}>
-                            {{ $user->nama }}@if($user->email) ({{ $user->email }})@endif
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-
-            <!-- Status Absensi -->
-            <div class="mb-4">
-                <label class="form-label form-label-premium">Status Absensi Hari Ini</label>
-                <div class="status-grid">
-                    @php
-                        $statusMeta = [
-                            'hadir' => ['icon' => 'fa-building', 'desc' => 'Di kantor'],
-                            'wfh' => ['icon' => 'fa-house', 'desc' => 'Work from home'],
-                            'sakit' => ['icon' => 'fa-face-tired', 'desc' => 'Butuh istirahat'],
-                            'izin' => ['icon' => 'fa-file-lines', 'desc' => 'Keperluan lain'],
-                        ];
-                    @endphp
-                    @foreach ($absensiStatuses as $statusOption)
-                        @php $meta = $statusMeta[$statusOption->kode] ?? ['icon' => 'fa-circle-check', 'desc' => 'Status absensi']; @endphp
-                        <div>
-                            <input type="radio" class="btn-check" name="status" id="status_{{ $statusOption->kode }}" value="{{ $statusOption->kode }}" {{ old('status', 'hadir') == $statusOption->kode ? 'checked' : '' }} autocomplete="off">
-                            <label class="status-card" for="status_{{ $statusOption->kode }}">
-                                <div class="s-icon s-icon-{{ $statusOption->kode }}"><i class="fa-solid {{ $meta['icon'] }}"></i></div>
-                                <div class="s-name">{{ $statusOption->nama }}</div>
-                                <div class="s-desc">{{ $meta['desc'] }}</div>
-                            </label>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-
-            <!-- Lokasi WFH -->
-            <div class="mb-4 location-panel" id="location_section">
-                <label class="form-label form-label-premium">Lokasi WFH <span class="text-danger">*</span></label>
-                <input type="hidden" name="lokasi_latitude" id="lokasi_latitude" value="{{ old('lokasi_latitude') }}">
-                <input type="hidden" name="lokasi_longitude" id="lokasi_longitude" value="{{ old('lokasi_longitude') }}">
-                <input type="hidden" name="lokasi_akurasi" id="lokasi_akurasi" value="{{ old('lokasi_akurasi') }}">
-                <div class="location-status">
-                    <i class="fa-solid fa-location-dot"></i>
-                    <div>
-                        <div id="location_status">Klik Kunci Lokasi untuk menyimpan posisi WFH saat ini.</div>
-                        <div class="location-meta">
-                            <span class="location-pill" id="location_accuracy">Akurasi: -</span>
-                            <span class="location-pill" id="location_coordinates">Koordinat: -</span>
-                        </div>
-                        <button type="button" class="btn btn-premium-secondary py-2 px-3 mt-3" id="lock_location">
-                            <i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Upload Lampiran -->
-            <div class="mb-4" id="photo_section">
-                <label id="foto_label" class="form-label form-label-premium">Lampiran</label>
-                <div class="upload-zone">
-                    <i class="fa-solid fa-cloud-arrow-up cloud d-block"></i>
-                    <div class="small fw-semibold text-dark" id="upload_text">Klik untuk unggah gambar</div>
-                    <div class="text-muted" style="font-size:0.72rem;">PNG, JPG, JPEG, WEBP - Maks 5 MB</div>
-                    <input type="file" name="foto" id="foto" accept="image/*">
-                    <div class="file-name" id="file_name"><i class="fa-solid fa-circle-check me-1"></i><span id="fname"></span></div>
-                    <img src="" class="upload-preview" id="foto_preview" alt="Preview lampiran">
-                </div>
-            </div>
-
-            <!-- Foto Kamera -->
-            <div class="mb-4" id="camera_section">
-                <label class="form-label form-label-premium" id="camera_label">Foto Kamera <span class="text-danger">*</span></label>
-                <input type="file" name="foto_kamera" id="foto_kamera" accept="image/*" class="d-none">
-                <div class="camera-start-actions" id="camera_start_actions">
-                    <span class="camera-message" id="camera_start_message">Nyalakan kamera lalu ambil foto untuk Hadir/WFH.</span>
-                    <button type="button" class="btn btn-premium-secondary py-2 px-3" id="start_camera">
-                        <i class="fa-solid fa-video me-1"></i> Nyalakan Kamera
-                    </button>
-                </div>
-                <div class="camera-panel" id="camera_panel">
-                    <video id="camera_video" autoplay playsinline muted></video>
-                    <img src="" class="camera-preview" id="camera_preview" alt="Preview foto kamera">
-                    <canvas id="camera_canvas" class="d-none"></canvas>
-                    <div class="camera-actions">
-                        <span class="camera-message" id="camera_message">Kamera aktif untuk Hadir/WFH.</span>
-                        <button type="button" class="btn btn-premium-primary py-2 px-3" id="capture_photo">
-                            <i class="fa-solid fa-camera me-1"></i> Ambil Foto
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Laporan -->
-            <div class="mb-4">
-                <label for="laporan" id="laporan_label" class="form-label form-label-premium">Laporan Pekerjaan <span class="text-danger">*</span></label>
-                <textarea name="laporan" id="laporan" rows="3" class="form-control form-control-premium" placeholder="Tuliskan laporan aktivitas hari ini..." required>{{ old('laporan') }}</textarea>
-            </div>
-
-            <button type="submit" class="btn btn-submit">
-                <i class="fa-solid fa-paper-plane me-2"></i> Kirim Absensi
-            </button>
-        </form>
-    </div>
-
-    @elseif ($activeTab === 'rekap')
-    {{-- ═══════════════ TAB 2: CEK REKAP & STATUS ═══════════════ --}}
-    <div class="rekap-wrap">
-
-        <!-- Filter Bar -->
-        <div class="filter-bar">
-            <form action="{{ route('absensi.index') }}" method="GET" id="rekapFilterForm">
-                <input type="hidden" name="tab" value="rekap">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label>Bidang Magang</label>
-                        <select name="bidang_magang" id="rekap_bidang_magang" class="form-select form-select-premium py-2">
-                            <option value="">-- Pilih Bidang --</option>
-                            @foreach ($bidangList as $b)
-                                <option value="{{ $b }}" {{ request('bidang_magang') == $b ? 'selected' : '' }}>{{ $b }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label>Peserta Magang</label>
-                        <select name="user_id" id="rekap_user_id" class="form-select form-select-premium py-2" disabled>
-                            <option value="" data-bidang="">Pilih bidang terlebih dahulu</option>
-                            @foreach ($users as $u)
-                                <option value="{{ $u->id }}" data-bidang="{{ $u->bidang_magang }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>{{ $u->nama }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label>Periode</label>
-                        <select name="filter_type" id="filter_type" class="form-select form-select-premium py-2">
-                            <option value="all" {{ $filterType == 'all' ? 'selected' : '' }}>Semua waktu</option>
-                            <option value="month" {{ $filterType == 'month' ? 'selected' : '' }}>Per bulan</option>
-                            <option value="date" {{ $filterType == 'date' ? 'selected' : '' }}>Tanggal spesifik</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-3 filter-extra {{ $filterType === 'date' ? 'show' : '' }}" id="dateFilter">
-                        <label>Tanggal</label>
-                        <input type="date" name="date" class="form-control form-control-premium py-2" value="{{ request('date') }}">
-                    </div>
-
-                    <div class="col-md-3 filter-extra {{ $filterType === 'month' ? 'show' : '' }}" id="monthFilter">
-                        <label>Bulan</label>
-                        <input type="month" name="month_filter" class="form-control form-control-premium py-2" value="{{ request('month_filter', date('Y-m')) }}">
-                    </div>
-
-                    <div class="col-md-3 ms-auto">
-                        <button type="submit" class="btn btn-premium-primary w-100 py-2">
-                            <i class="fa-solid fa-filter me-1"></i> Terapkan Filter
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card highlight">
-                <div class="pct-ring">
-                    <svg viewBox="0 0 100 100">
-                        <circle class="pct-ring-bg" cx="50" cy="50" r="40"/>
-                        @php $c = 2 * pi() * 40; $o = $c - ($stats['persentase']/100) * $c; @endphp
-                        <circle class="pct-ring-fill" cx="50" cy="50" r="40" style="stroke-dasharray:{{ $c }}; stroke-dashoffset:{{ $o }};"/>
-                    </svg>
-                    <span class="pct-label">{{ $stats['persentase'] }}%</span>
-                </div>
+    <!-- 1. Project Overview (Top - Full Width) -->
+    @if ($timelineProjects->isNotEmpty())
+        @php $project = $timelineProjects->first(); @endphp
+        <div class="project-overview-card">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                 <div>
-                    <div class="text-muted" style="font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Persentase</div>
-                    <div class="fw-bold">Kehadiran</div>
-                    <div class="text-muted small">Hadir + WFH · {{ $stats['total_hari_kerja'] }} hari kerja</div>
+                    <span class="project-status-badge status-on-track">
+                        <i class="fa-solid fa-circle-play me-1"></i> Proyek Aktif
+                    </span>
+                    <h4 class="fw-bold mt-2 mb-1 text-dark">{{ $project->nama }}</h4>
+                    <p class="text-muted small mb-0">
+                        <i class="fa-regular fa-calendar me-1"></i> Durasi: {{ $project->tanggal_mulai->translatedFormat('d M Y') }} — {{ $project->tanggal_selesai->translatedFormat('d M Y') }}
+                    </p>
+                </div>
+                <!-- Progress Ring SVG -->
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 60px; height: 60px; position: relative;">
+                        <svg viewBox="0 0 36 36" style="width: 100%; height: 100%;">
+                            <circle class="pct-ring-bg" cx="18" cy="18" r="16" fill="none" stroke-width="3" />
+                            <circle class="pct-ring-fill" cx="18" cy="18" r="16" fill="none" stroke-width="3" stroke-dasharray="{{ $project->actual_progress }}, 100" />
+                        </svg>
+                        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 800; color: var(--dark);">
+                            {{ $project->actual_progress }}%
+                        </div>
+                    </div>
+                    <div>
+                        <div class="small fw-bold text-dark">Aktual Progress</div>
+                        <div class="text-muted small">Bobot Modul Selesai</div>
+                    </div>
+                </div>
+            </div>
+            @if ($project->kebutuhan)
+                <p class="text-muted small mb-3">{{ \Illuminate\Support\Str::limit($project->kebutuhan, 200) }}</p>
+            @endif
+            <div class="row g-3 align-items-center mt-2">
+                <div class="col-sm-6">
+                    <div class="d-flex justify-content-between mb-1 small">
+                        <span class="text-muted">Progres Rencana (Linear)</span>
+                        <span class="fw-bold text-dark">{{ $project->planned_progress }}%</span>
+                    </div>
+                    <div class="progress-bar-slim">
+                        <div class="progress-fill" style="width: {{ $project->planned_progress }}%; background: #94a3b8;"></div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="d-flex justify-content-between mb-1 small">
+                        <span class="text-muted">Progres Aktual (Bobot Modul)</span>
+                        <span class="fw-bold text-primary">{{ $project->actual_progress }}%</span>
+                    </div>
+                    <div class="progress-bar-slim">
+                        <div class="progress-fill" style="width: {{ $project->actual_progress }}%; background: var(--primary);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @else
+        <!-- Placeholder if no project assigned -->
+        <div class="project-overview-card text-center py-4">
+            <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width:48px; height:48px; background:rgba(99,102,241,0.06);">
+                <i class="fa-solid fa-folder-open text-primary" style="font-size:1.2rem;"></i>
+            </div>
+            <h6 class="fw-bold mb-1">Belum Ada Proyek Aktif</h6>
+            <p class="text-muted small mb-0">Hubungi admin untuk mendaftarkan Anda ke proyek magang agar dapat mengambil tugas.</p>
+        </div>
+    @endif
+
+    <!-- 2. Workspace Grid (Middle - Two Column Layout) -->
+    <div class="row g-4">
+        <!-- Kolom Kiri -->
+        <div class="col-lg-8">
+            <!-- Task Saya Hari Ini -->
+            <div class="ws-card mb-4">
+                <div class="ws-card-header">
+                    <h6><i class="fa-solid fa-list-check me-2" style="color:var(--primary);"></i>Task Saya Hari Ini</h6>
+                    <span class="badge bg-primary rounded-pill">{{ $myTodayTasks->count() + $myReviewTasks->count() }} task</span>
+                </div>
+                <div class="ws-card-body">
+                    @if ($myTodayTasks->isEmpty() && $myReviewTasks->isEmpty())
+                        <!-- Empty State -->
+                        <div class="empty-state-ws">
+                            <div class="empty-icon"><i class="fa-solid fa-list-check"></i></div>
+                            <h6>Tidak ada task aktif</h6>
+                            <p>Ambil tugas baru di bawah untuk mulai mengerjakannya.</p>
+                        </div>
+                    @else
+                        <!-- List of Tasks -->
+                        @foreach ($myTodayTasks as $task)
+                            <div class="task-active-card p-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <div>
+                                        <div class="text-muted small" style="font-size:0.75rem;">
+                                            {{ $task->project->nama }} &middot; {{ $task->module->nama ?? 'Umum' }}
+                                        </div>
+                                        <h6 class="fw-bold mt-1 text-dark mb-1">{{ $task->judul }}</h6>
+                                        <p class="text-muted small mb-0"><i class="fa-regular fa-calendar me-1"></i>Batas Waktu: {{ $task->tanggal_selesai ? $task->tanggal_selesai->translatedFormat('d M Y') : '-' }}</p>
+                                    </div>
+                                    @if ($task->catatan_revisi)
+                                        <span class="task-badge task-badge-revision"><i class="fa-solid fa-triangle-exclamation"></i> Revisi</span>
+                                    @else
+                                        <span class="task-badge task-badge-working"><i class="fa-solid fa-spinner fa-spin"></i> Dikerjakan</span>
+                                    @endif
+                                </div>
+                                
+                                @if ($task->deskripsi)
+                                    <div class="bg-light p-2 rounded-3 small mb-3 text-muted">
+                                        <strong>Deskripsi:</strong> {{ $task->deskripsi }}
+                                    </div>
+                                @endif
+
+                                @if ($task->catatan_revisi)
+                                    <div class="alert alert-danger py-2 px-3 rounded-3 small mb-3">
+                                        <strong><i class="fa-solid fa-circle-exclamation me-1"></i> Catatan Revisi Admin:</strong>
+                                        <div class="mt-1">{{ $task->catatan_revisi }}</div>
+                                    </div>
+                                @endif
+
+                                <!-- Form Serahkan Tugas -->
+                                <div class="border-top pt-3 mt-2">
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill" type="button" data-bs-toggle="collapse" data-bs-target="#submitForm-{{ $task->id }}">
+                                        <i class="fa-solid fa-paper-plane me-1"></i> Serahkan Pekerjaan
+                                    </button>
+                                    
+                                    <div class="collapse mt-3" id="submitForm-{{ $task->id }}">
+                                        <form action="{{ route('absensi.task.submit_work', $task) }}" method="POST" enctype="multipart/form-data">
+                                            @csrf
+                                            <div class="mb-3">
+                                                <label class="form-label-admin">Laporan Hasil Pekerjaan <span class="text-danger">*</span></label>
+                                                <textarea name="laporan_kerja" rows="3" class="form-control form-control-admin w-100" placeholder="Tuliskan rincian, kendala, atau tautan hasil pekerjaan Anda..." required></textarea>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label-admin">Unggah File Lampiran (Opsional)</label>
+                                                <input type="file" name="lampiran" class="form-control form-control-admin w-100" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip">
+                                                <div class="text-muted small mt-1" style="font-size:0.7rem;">Format: PDF, JPG, JPEG, PNG, WEBP, ZIP. Maks 10 MB.</div>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary btn-sm rounded-3">Kirim Laporan</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        @foreach ($myReviewTasks as $task)
+                            <div class="task-active-card p-3 mb-3" style="border-left-color: #f59e0b !important;">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="text-muted small" style="font-size:0.75rem;">
+                                            {{ $task->project->nama }} &middot; {{ $task->module->nama ?? 'Umum' }}
+                                        </div>
+                                        <h6 class="fw-bold mt-1 text-dark mb-1">{{ $task->judul }}</h6>
+                                        <p class="text-muted small mb-0"><i class="fa-regular fa-calendar me-1"></i>Diserahkan pada: {{ $task->tanggal_selesai_kerja ? $task->tanggal_selesai_kerja->translatedFormat('d M Y H:i') : '-' }}</p>
+                                    </div>
+                                    <span class="task-badge task-badge-review"><i class="fa-regular fa-clock"></i> Review</span>
+                                </div>
+                            </div>
+                        @endforeach
+                    @endif
                 </div>
             </div>
 
-            @foreach([
-                ['Hadir', $stats['hadir'], '#00b894', 'rgba(0,184,148,0.12)'],
-                ['WFH', $stats['wfh'], '#6c5ce7', 'rgba(108,92,231,0.12)'],
-                ['Sakit', $stats['sakit'], '#e17055', 'rgba(225,112,85,0.12)'],
-                ['Izin', $stats['izin'], '#d97706', 'rgba(245,158,11,0.15)'],
-            ] as $s)
-            <div class="stat-card">
-                <span class="stat-pill" style="background:{{ $s[3] }}; color:{{ $s[2] }};">
-                    <span style="width:6px;height:6px;border-radius:50%;background:{{ $s[2] }};"></span>
-                    {{ $s[0] }}
-                </span>
-                <div class="stat-value">{{ $s[1] }}</div>
-                <div class="stat-label">Total {{ $s[0] }}</div>
-            </div>
-            @endforeach
-        </div>
-
-        <!-- History Table -->
-        <div class="history-card">
-            <div class="history-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <h6 class="fw-bold mb-0" style="color:var(--dark);">
-                    <i class="fa-solid fa-clock-rotate-left me-1 text-primary"></i> Riwayat Laporan
-                </h6>
-                <span class="text-muted small">{{ $absensi->count() }} entri</span>
-            </div>
-
-            @if ($absensi->isEmpty())
-                <div class="text-center py-5 px-3">
-                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:56px; height:56px; background:rgba(108,92,231,0.06);">
-                        <i class="fa-solid fa-file-lines text-primary" style="font-size:1.3rem;"></i>
+            <!-- Available Tasks & Warnings -->
+            @if ($hasActiveTask)
+                <div class="focus-banner mb-4">
+                    <div class="focus-banner-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div>
+                        <div class="fw-bold text-dark small">Alur Kerja Terfokus Aktif</div>
+                        <p class="text-muted small mb-0 mt-0.5">Selesaikan task aktif atau ajukan laporan pengerjaan Anda sebelum diperbolehkan mengambil tugas baru.</p>
                     </div>
-                    <h6 class="fw-bold">Belum ada laporan</h6>
-                    <p class="text-muted small mb-0">Ubah filter atau kirim absensi pertama dari tab Form Absensi Baru.</p>
                 </div>
             @else
-                <div class="table-responsive">
-                    <table class="rekap-table">
-                        <thead>
+                <div class="ws-card mb-4">
+                    <div class="ws-card-header">
+                        <h6><i class="fa-solid fa-briefcase me-2" style="color:var(--primary);"></i>Tugas & Modul yang Tersedia</h6>
+                    </div>
+                    <div class="ws-card-body">
+                        @if ($allAvailableTasks->isEmpty() && $availableModules->isEmpty())
+                            <div class="text-center py-4">
+                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width:48px; height:48px; background:rgba(99,102,241,0.06);">
+                                    <i class="fa-solid fa-circle-check text-primary" style="font-size:1.2rem;"></i>
+                                </div>
+                                <h6 class="fw-bold mb-1">Semua beres!</h6>
+                                <p class="text-muted small mb-0">Tidak ada tugas atau modul baru yang tersedia untuk Anda saat ini.</p>
+                            </div>
+                        @else
+                            @if ($allAvailableTasks->isNotEmpty())
+                                @php
+                                    $groupedTasks = $allAvailableTasks->groupBy(fn($t) => $t->module_id ? $t->module->nama : 'Tugas Umum');
+                                @endphp
+                                @foreach ($groupedTasks as $moduleName => $tasks)
+                                    <div class="module-header mt-3">
+                                        <div class="module-icon"><i class="fa-solid fa-cubes"></i></div>
+                                        <span class="module-title">{{ $moduleName }}</span>
+                                        @if ($tasks->first()->module && $tasks->first()->module->bobot)
+                                            <span class="module-bobot">Bobot: {{ $tasks->first()->module->bobot }}%</span>
+                                        @endif
+                                    </div>
+                                    <div class="row g-3 mb-4">
+                                        @foreach ($tasks as $task)
+                                            <div class="col-md-6">
+                                                <div class="task-item">
+                                                    <div>
+                                                        <div class="task-item-title">{{ $task->judul }}</div>
+                                                        @if ($task->deskripsi)
+                                                            <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($task->deskripsi, 80) }}</p>
+                                                        @endif
+                                                        <div class="task-item-meta">
+                                                            <i class="fa-regular fa-calendar-xmark me-1"></i>Batas: {{ $task->tanggal_selesai ? $task->tanggal_selesai->translatedFormat('d M Y') : '-' }}
+                                                        </div>
+                                                    </div>
+                                                    <form action="{{ route('absensi.task.ambil', $task) }}" method="POST">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 rounded-pill mt-2">
+                                                            <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Tugas
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endforeach
+                            @endif
+
+                            @if ($availableModules->isNotEmpty())
+                                <div class="module-header mt-4">
+                                    <div class="module-icon"><i class="fa-solid fa-folder-tree"></i></div>
+                                    <span class="module-title">Modul Pekerjaan yang Tersedia (Ambil Satu Modul Utuh)</span>
+                                </div>
+                                <div class="row g-3 mb-4">
+                                    @foreach ($availableModules as $module)
+                                        <div class="col-md-6">
+                                            <div class="task-item" style="border-color: #10b981 !important;">
+                                                <div>
+                                                    <div class="task-item-title text-success"><i class="fa-solid fa-cubes me-1"></i> {{ $module->nama }}</div>
+                                                    <p class="text-muted small mb-1" style="font-size:0.72rem;">Proyek: <strong>{{ $module->project->nama }}</strong></p>
+                                                    @if ($module->deskripsi)
+                                                        <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($module->deskripsi, 80) }}</p>
+                                                    @endif
+                                                    <div class="task-item-meta">
+                                                        Bobot Modul: {{ $module->bobot }}%
+                                                    </div>
+                                                </div>
+                                                <form action="{{ route('absensi.module.ambil', $module) }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-outline-success btn-sm w-100 rounded-pill mt-2">
+                                                        <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Modul Pekerjaan
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        @endif
+                    </div>
+                </div>
+            @endif
+
+            <!-- Form Presensi Kehadiran -->
+            <div class="presensi-card">
+                @if ($todayAttendance && $todayAttendance->jam_masuk && $todayAttendance->jam_pulang)
+                    <!-- Completed attendance -->
+                    <div class="text-center py-3">
+                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:56px; height:56px; background:rgba(16,185,129,0.06); color:#00b894;">
+                            <i class="fa-solid fa-circle-check" style="font-size:1.5rem;"></i>
+                        </div>
+                        <h6 class="fw-bold">Presensi Hari Ini Lengkap</h6>
+                        <p class="text-muted small">Anda telah mengisi absensi masuk dan pulang untuk hari ini.</p>
+                        <div class="d-flex justify-content-center gap-3 mt-2">
+                            <span class="badge bg-light text-dark py-2 px-3 rounded-pill border">Masuk: {{ $todayAttendance->jam_masuk }}</span>
+                            <span class="badge bg-light text-dark py-2 px-3 rounded-pill border">Pulang: {{ $todayAttendance->jam_pulang }}</span>
+                        </div>
+                    </div>
+                @elseif ($todayAttendance && $todayAttendance->jam_masuk && !$todayAttendance->jam_pulang)
+                    <!-- Checkout form -->
+                    <h6 class="fw-bold mb-3"><i class="fa-solid fa-right-from-bracket me-2 text-primary"></i>Absen Pulang</h6>
+                    <p class="text-muted small">Wajib mengunggah lampiran pengerjaan dan menulis laporan pekerjaan harian.</p>
+                    
+                    <form action="{{ route('absensi.store') }}" method="POST" enctype="multipart/form-data" id="attendanceForm">
+                        @csrf
+                        <input type="hidden" name="status" id="status_checkout" value="{{ $todayAttendance->status }}">
+                        <input type="hidden" name="lokasi_latitude" id="lokasi_latitude" value="{{ old('lokasi_latitude') }}">
+                        <input type="hidden" name="lokasi_longitude" id="lokasi_longitude" value="{{ old('lokasi_longitude') }}">
+                        <input type="hidden" name="lokasi_akurasi" id="lokasi_akurasi" value="{{ old('lokasi_akurasi') }}">
+
+                        <!-- Location panel -->
+                        <div class="mb-3 location-panel show" id="location_section">
+                            <label class="form-label-admin">Verifikasi Lokasi <span class="text-danger">*</span></label>
+                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-center">
+                                <i class="fa-solid fa-location-dot text-primary" style="font-size:1.2rem;"></i>
+                                <div>
+                                    <div id="location_status" class="small">Klik Kunci Lokasi untuk mengambil koordinat Anda.</div>
+                                    <div class="location-meta mt-1 small">
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy">Akurasi: -</span>
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates">Koordinat: -</span>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2 rounded-3" id="lock_location">
+                                        <i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if ($todayAttendance->status === 'sakit')
+                            <!-- Required camera capture for sakit checkout -->
+                            <div class="mb-3" id="camera_section" style="display: block;">
+                                <label class="form-label-admin" id="camera_label">Foto Kamera Terkini <span class="text-danger">*</span></label>
+                                <input type="file" name="foto_kamera" id="foto_kamera" accept="image/*" class="d-none">
+                                <div class="camera-start-actions" id="camera_start_actions">
+                                    <span class="camera-message small">Nyalakan kamera lalu ambil foto diri untuk bukti.</span>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="start_camera">
+                                        <i class="fa-solid fa-video me-1"></i> Kamera
+                                    </button>
+                                </div>
+                                <div class="camera-panel" id="camera_panel" style="display: none;">
+                                    <video id="camera_video" autoplay playsinline muted></video>
+                                    <img src="" class="camera-preview" id="camera_preview" alt="Preview foto">
+                                    <canvas id="camera_canvas" class="d-none"></canvas>
+                                    <div class="camera-actions p-2 bg-light border-top d-flex justify-content-between align-items-center">
+                                        <span class="camera-message small text-muted" id="camera_message">Kamera Aktif</span>
+                                        <button type="button" class="btn btn-primary btn-sm rounded-3" id="capture_photo">
+                                            <i class="fa-solid fa-camera me-1"></i> Ambil Foto
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
+                        @if (in_array($todayAttendance->status, ['hadir', 'wfh'], true))
+                            <!-- Required file upload for Hadir/WFH checkout -->
+                            <div class="mb-3" id="photo_section" style="display: block;">
+                                <label id="foto_label" class="form-label-admin">Unggah Gambar Bukti Pengerjaan <span class="text-danger">*</span></label>
+                                <div class="upload-zone p-3 border text-center rounded-3 bg-light">
+                                    <i class="fa-solid fa-cloud-arrow-up text-muted d-block mb-1" style="font-size: 1.5rem;"></i>
+                                    <div class="small fw-semibold text-dark" id="upload_text">Klik untuk pilih gambar bukti kerja</div>
+                                    <input type="file" name="foto" id="foto" accept="image/*" required>
+                                    <div class="file-name text-primary small mt-1" id="file_name" style="display: none;">
+                                        <i class="fa-solid fa-check-circle me-1"></i><span id="fname"></span>
+                                    </div>
+                                    <img src="" class="upload-preview mt-2 w-100 rounded-3 border" id="foto_preview" style="display: none; max-height: 180px; object-fit: contain;">
+                                </div>
+                            </div>
+
+                            <!-- Required Keterangan/Laporan for Hadir/WFH checkout -->
+                            <div class="mb-3">
+                                <label for="laporan" id="laporan_label" class="form-label-admin">Laporan Hasil Pekerjaan Hari Ini <span class="text-danger">*</span></label>
+                                <textarea name="keterangan" id="laporan" rows="3" class="form-control form-control-admin w-100" placeholder="Jelaskan progres pekerjaan Anda hari ini..." required>{{ old('keterangan') }}</textarea>
+                            </div>
+                        @else
+                            <!-- Optional Keterangan for Sakit/Izin checkout -->
+                            <div class="mb-3">
+                                <label for="laporan" id="laporan_label" class="form-label-admin">Catatan/Keterangan Tambahan</label>
+                                <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Keterangan tambahan..." required>{{ old('keterangan') }}</textarea>
+                            </div>
+                        @endif
+
+                        <button type="submit" class="btn btn-primary w-100 py-2.5 rounded-3">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Kirim Absen Pulang
+                        </button>
+                    </form>
+                @else
+                    <!-- Check-in form -->
+                    <h6 class="fw-bold mb-3"><i class="fa-solid fa-right-to-bracket me-2 text-primary"></i>Absen Masuk</h6>
+                    
+                    @php
+                        $hasProjects = $timelineProjects->isNotEmpty();
+                        $hasAvailableTasks = $allAvailableTasks->isNotEmpty();
+                        // Disabling Hadir/WFH only if they have projects but no active task AND no available tasks to pick.
+                        $isHadirWfhDisabled = $hasProjects && !$hasActiveTask && !$hasAvailableTasks;
+                    @endphp
+
+                    @if ($isHadirWfhDisabled)
+                        <!-- Warning banner for workflow terfokus when no tasks available -->
+                        <div class="alert alert-warning py-2.5 px-3 rounded-3 small mb-3">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                            Pilihan status <strong>Hadir/WFH</strong> dinonaktifkan karena tidak ada tugas (task) yang tersedia untuk proyek Anda. Hubungi admin untuk menambahkan tugas baru.
+                        </div>
+                    @endif
+
+                    <form action="{{ route('absensi.store') }}" method="POST" enctype="multipart/form-data" id="attendanceForm">
+                        @csrf
+                        <input type="hidden" name="lokasi_latitude" id="lokasi_latitude" value="{{ old('lokasi_latitude') }}">
+                        <input type="hidden" name="lokasi_longitude" id="lokasi_longitude" value="{{ old('lokasi_longitude') }}">
+                        <input type="hidden" name="lokasi_akurasi" id="lokasi_akurasi" value="{{ old('lokasi_akurasi') }}">
+
+                        @if ($hasActiveTask)
+                            @php $activeTaskId = $myTodayTasks->first() ? $myTodayTasks->first()->id : null; @endphp
+                            <!-- Active task info block -->
+                            <div class="mb-3" id="active_task_info_container">
+                                <label class="form-label-admin">Tugas Aktif yang Sedang Dikerjakan</label>
+                                <div class="p-2.5 border rounded-3 bg-light text-dark small fw-semibold">
+                                    <i class="fa-solid fa-circle-play text-primary me-1"></i>
+                                    [{{ $myTodayTasks->first() ? $myTodayTasks->first()->project->nama : 'Project' }}] {{ $myTodayTasks->first() ? $myTodayTasks->first()->judul : '-' }}
+                                </div>
+                                <input type="hidden" name="task_id" value="{{ $activeTaskId }}">
+                            </div>
+                        @elseif ($hasAvailableTasks)
+                            <!-- Task Selection dropdown for check-in -->
+                            <div class="mb-3" id="task_selection_container" style="display: none;">
+                                <label for="task_id_select" class="form-label-admin">Pilih Tugas yang Akan Dikerjakan <span class="text-danger">*</span></label>
+                                <select name="task_id" id="task_id_select" class="form-select form-control-admin w-100" required>
+                                    <option value="" disabled selected>-- Pilih Tugas --</option>
+                                    @foreach ($allAvailableTasks as $task)
+                                        <option value="{{ $task->id }}">
+                                            [{{ $task->project->nama }} - {{ $task->module->nama ?? 'Umum' }}] {{ $task->judul }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div class="text-muted small mt-1" style="font-size:0.7rem;">Pilih tugas untuk memulai Focused Workflow hari ini.</div>
+                            </div>
+                        @endif
+
+                        <!-- Status Absensi Radios -->
+                        <div class="mb-3">
+                            <label class="form-label-admin">Status Absensi Masuk <span class="text-danger">*</span></label>
+                            <div class="status-grid">
+                                
+                                <!-- Hadir -->
+                                <div>
+                                    <input type="radio" class="btn-check" name="status" id="status_hadir" value="hadir" {{ old('status', 'hadir') === 'hadir' ? 'checked' : '' }} {{ $isHadirWfhDisabled ? 'disabled' : '' }} autocomplete="off">
+                                    <label class="status-card" for="status_hadir">
+                                        <div class="s-icon s-icon-hadir"><i class="fa-solid fa-building"></i></div>
+                                        <div class="s-name">Hadir</div>
+                                        <div class="s-desc">Di kantor</div>
+                                    </label>
+                                </div>
+
+                                <!-- WFH -->
+                                <div>
+                                    <input type="radio" class="btn-check" name="status" id="status_wfh" value="wfh" {{ old('status') === 'wfh' ? 'checked' : '' }} {{ $isHadirWfhDisabled ? 'disabled' : '' }} autocomplete="off">
+                                    <label class="status-card" for="status_wfh">
+                                        <div class="s-icon s-icon-wfh"><i class="fa-solid fa-house"></i></div>
+                                        <div class="s-name">WFH</div>
+                                        <div class="s-desc">Kerja remote</div>
+                                    </label>
+                                </div>
+
+                                <!-- Sakit -->
+                                <div>
+                                    <input type="radio" class="btn-check" name="status" id="status_sakit" value="sakit" {{ old('status') === 'sakit' ? 'checked' : '' }} autocomplete="off">
+                                    <label class="status-card" for="status_sakit">
+                                        <div class="s-icon s-icon-sakit"><i class="fa-solid fa-face-tired"></i></div>
+                                        <div class="s-name">Sakit</div>
+                                        <div class="s-desc">Izin medis</div>
+                                    </label>
+                                </div>
+
+                                <!-- Izin -->
+                                <div>
+                                    <input type="radio" class="btn-check" name="status" id="status_izin" value="izin" {{ old('status') === 'izin' ? 'checked' : '' }} autocomplete="off">
+                                    <label class="status-card" for="status_izin">
+                                        <div class="s-icon s-icon-izin"><i class="fa-solid fa-file-lines"></i></div>
+                                        <div class="s-name">Izin</div>
+                                        <div class="s-desc">Keperluan lain</div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Location Locker Section -->
+                        <div class="mb-3 location-panel" id="location_section">
+                            <label class="form-label-admin" id="location_label">Lokasi WFH <span class="text-danger">*</span></label>
+                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-center">
+                                <i class="fa-solid fa-location-dot text-primary" style="font-size:1.2rem;"></i>
+                                <div>
+                                    <div id="location_status" class="small">Klik Kunci Lokasi untuk menyimpan posisi WFH.</div>
+                                    <div class="location-meta mt-1 small">
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy">Akurasi: -</span>
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates">Koordinat: -</span>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2 rounded-3" id="lock_location">
+                                        <i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Camera Capture Section -->
+                        <div class="mb-3" id="camera_section">
+                            <label class="form-label-admin" id="camera_label">Foto Kamera <span class="text-danger">*</span></label>
+                            <input type="file" name="foto_kamera" id="foto_kamera" accept="image/*" class="d-none">
+                            <div class="camera-start-actions" id="camera_start_actions">
+                                <span class="camera-message small">Nyalakan kamera lalu ambil foto diri untuk bukti.</span>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="start_camera">
+                                    <i class="fa-solid fa-video me-1"></i> Kamera
+                                </button>
+                            </div>
+                            <div class="camera-panel" id="camera_panel" style="display: none;">
+                                <video id="camera_video" autoplay playsinline muted></video>
+                                <img src="" class="camera-preview" id="camera_preview" alt="Preview foto">
+                                <canvas id="camera_canvas" class="d-none"></canvas>
+                                <div class="camera-actions p-2 bg-light border-top d-flex justify-content-between align-items-center">
+                                    <span class="camera-message small text-muted" id="camera_message">Kamera Aktif</span>
+                                    <button type="button" class="btn btn-primary btn-sm rounded-3" id="capture_photo">
+                                        <i class="fa-solid fa-camera me-1"></i> Ambil Foto
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Upload File (for Sakit / Izin) -->
+                        <div class="mb-3" id="photo_section">
+                            <label id="foto_label" class="form-label-admin">Surat Keterangan / Lampiran <span class="text-danger">*</span></label>
+                            <div class="upload-zone p-3 border text-center rounded-3 bg-light">
+                                <i class="fa-solid fa-cloud-arrow-up text-muted d-block mb-1" style="font-size: 1.5rem;"></i>
+                                <div class="small fw-semibold text-dark" id="upload_text">Klik untuk unggah berkas</div>
+                                <input type="file" name="foto" id="foto" accept="image/*,.pdf">
+                                <div class="file-name text-primary small mt-1" id="file_name" style="display: none;">
+                                    <i class="fa-solid fa-check-circle me-1"></i><span id="fname"></span>
+                                </div>
+                                <img src="" class="upload-preview mt-2 w-100 rounded-3 border" id="foto_preview" style="display: none; max-height: 180px; object-fit: contain;">
+                            </div>
+                        </div>
+
+                        <!-- Laporan / Alasan (Izin / Sakit) -->
+                        <div class="mb-3">
+                            <label for="laporan" id="laporan_label" class="form-label-admin">Catatan/Alasan <span class="text-danger">*</span></label>
+                            <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Rincian alasan atau keterangan tambahan..." required>{{ old('keterangan') }}</textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 py-2.5 rounded-3">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Kirim Absen Masuk
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+
+        <!-- Kolom Kanan -->
+        <div class="col-lg-4">
+            <!-- Ringkasan Kehadiran -->
+            <div class="stat-widget">
+                <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Kehadiran Bulanan</h6>
+                
+                <div class="d-flex align-items-center justify-content-center mb-4">
+                    <div style="width: 120px; height: 120px; position: relative;">
+                        <svg viewBox="0 0 36 36" style="width: 100%; height: 100%;">
+                            <circle class="pct-ring-bg" cx="18" cy="18" r="16" fill="none" stroke-width="3" />
+                            <circle class="pct-ring-fill" cx="18" cy="18" r="16" fill="none" stroke-width="3" stroke-dasharray="{{ $stats['persentase'] }}, 100" />
+                        </svg>
+                        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <span style="font-size: 1.3rem; font-weight: 800; color: var(--dark); line-height: 1;">{{ $stats['persentase'] }}%</span>
+                            <span class="text-muted" style="font-size: 0.65rem;">Kehadiran</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-rows mt-2">
+                    <div class="stat-row" style="background: rgba(0, 184, 148, 0.05);">
+                        <span class="small fw-semibold"><span class="stat-dot" style="background:#00b894;"></span>Hadir</span>
+                        <span class="badge bg-success-subtle text-success">{{ $stats['hadir'] }} hari</span>
+                    </div>
+                    <div class="stat-row" style="background: rgba(108, 92, 231, 0.05);">
+                        <span class="small fw-semibold"><span class="stat-dot" style="background:var(--primary);"></span>WFH</span>
+                        <span class="badge bg-primary-subtle text-primary">{{ $stats['wfh'] }} hari</span>
+                    </div>
+                    <div class="stat-row" style="background: rgba(225, 112, 85, 0.05);">
+                        <span class="small fw-semibold"><span class="stat-dot" style="background:#e17055;"></span>Sakit</span>
+                        <span class="badge bg-danger-subtle text-danger">{{ $stats['sakit'] }} hari</span>
+                    </div>
+                    <div class="stat-row" style="background: rgba(253, 203, 110, 0.08);">
+                        <span class="small fw-semibold"><span class="stat-dot" style="background:#fdcb6e;"></span>Izin</span>
+                        <span class="badge bg-warning-subtle text-warning">{{ $stats['izin'] }} hari</span>
+                    </div>
+                </div>
+                <div class="text-muted text-center mt-3" style="font-size: 0.72rem;">
+                    Total hari kerja: {{ $stats['total_hari_kerja'] }} hari
+                </div>
+            </div>
+        </div>
+    </div> <!-- /row -->
+
+    <!-- Riwayat Presensi (Bottom - Full Width) -->
+    <div class="history-wrap mt-4">
+        <div class="ws-card-header">
+            <h6><i class="fa-solid fa-clock-rotate-left me-2" style="color:var(--primary);"></i>Riwayat Kehadiran</h6>
+            <span class="badge bg-light text-dark border">{{ $absensi->count() }} entri</span>
+        </div>
+        
+        @if ($absensi->isEmpty())
+            <div class="text-center py-5">
+                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:56px; height:56px; background:rgba(99,102,241,0.06);">
+                    <i class="fa-solid fa-calendar-xmark text-primary" style="font-size:1.3rem;"></i>
+                </div>
+                <h6 class="fw-bold">Belum ada riwayat presensi</h6>
+                <p class="text-muted small">Catatan kehadiran Anda akan muncul di sini setelah melakukan absen masuk.</p>
+            </div>
+        @else
+            <div class="table-responsive">
+                <table class="history-table w-100">
+                    <thead>
+                        <tr>
+                            <th>Tanggal & Waktu</th>
+                            <th>Status</th>
+                            <th>Tugas Terkait</th>
+                            <th>Foto Masuk/Pulang</th>
+                            <th>Lampiran</th>
+                            <th>Catatan Pekerjaan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($absensi as $rec)
                             <tr>
-                                @if (!request('user_id'))
-                                    <th>Peserta Magang</th>
-                                @endif
-                                <th>Tanggal &amp; Waktu</th>
-                                <th>Status</th>
-                                <th>Laporan</th>
-                                <th>Foto Kamera</th>
-                                <th>Lampiran</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($absensi as $rec)
-                            <tr>
-                                @if (!request('user_id'))
-                                    <td class="fw-semibold">{{ $rec->user->nama ?? '-' }}</td>
-                                @endif
                                 <td>
-                                    <div class="fw-medium">{{ \Carbon\Carbon::parse($rec->tanggal)->translatedFormat('d M Y') }}</div>
-                                    <div class="text-muted" style="font-size:0.75rem;">{{ $rec->created_at->timezone(config('app.timezone'))->format('H:i') }} WIB</div>
-                                </td>
-                                <td><span class="badge badge-status badge-{{ $rec->status }}">{{ strtoupper($rec->status_label ?? $rec->status) }}</span></td>
-                                <td style="max-width:280px;">
-                                    <span class="text-muted" style="font-size:0.82rem; line-height:1.5;">{{ Str::limit($rec->laporan, 80) }}</span>
+                                    <div class="fw-semibold">{{ \Carbon\Carbon::parse($rec->tanggal)->translatedFormat('d M Y') }}</div>
+                                    <div class="text-muted" style="font-size:0.75rem;">
+                                        Masuk: {{ $rec->jam_masuk ?? '-' }} | Pulang: {{ $rec->jam_pulang ?? '-' }}
+                                    </div>
                                 </td>
                                 <td>
-                                    @if ($rec->foto_kamera)
-                                        @php $kameraUrl = route('absensi.kamera', $rec); @endphp
-                                        <a href="{{ $kameraUrl }}" target="_blank" class="attachment-link">
-                                            <img src="{{ $kameraUrl }}" alt="Foto Kamera" style="width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--border);" onerror="this.classList.add('d-none'); this.nextElementSibling.classList.remove('d-none');">
-                                            <span class="d-none"><i class="fa-solid fa-camera me-1"></i>Lihat</span>
-                                        </a>
+                                    <span class="badge-status badge-{{ $rec->status }}">
+                                        {{ strtoupper($rec->status) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    @if ($rec->task)
+                                        <div class="fw-medium text-dark" style="font-size:0.8rem;">{{ $rec->task->judul }}</div>
+                                        <div class="text-muted" style="font-size:0.7rem;">{{ $rec->task->project->nama }}</div>
                                     @else
                                         <span class="text-muted">-</span>
                                     @endif
                                 </td>
                                 <td>
+                                    <div class="d-flex gap-2">
+                                        @if ($rec->foto_kamera)
+                                            <a href="{{ route('absensi.kamera', $rec) }}" target="_blank">
+                                                <img src="{{ route('absensi.kamera', $rec) }}" class="attachment-thumb" title="Foto Kamera">
+                                            </a>
+                                        @elseif ($rec->foto_masuk)
+                                            <a href="{{ route('absensi.kamera', $rec) }}" target="_blank">
+                                                <img src="{{ asset($rec->foto_masuk) }}" class="attachment-thumb" title="Foto Masuk">
+                                            </a>
+                                        @endif
+                                        @if ($rec->foto_pulang)
+                                            <a href="{{ asset($rec->foto_pulang) }}" target="_blank">
+                                                <img src="{{ asset($rec->foto_pulang) }}" class="attachment-thumb" title="Foto Pulang">
+                                            </a>
+                                        @endif
+                                        @if (!$rec->foto_kamera && !$rec->foto_masuk && !$rec->foto_pulang)
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td>
                                     @if ($rec->foto)
-                                        @php $lampiranUrl = route('absensi.lampiran', $rec); @endphp
-                                        <a href="{{ $lampiranUrl }}" target="_blank" class="attachment-link">
-                                            <img src="{{ $lampiranUrl }}" alt="Lampiran" style="width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--border);" onerror="this.classList.add('d-none'); this.nextElementSibling.classList.remove('d-none');">
-                                            <span class="d-none"><i class="fa-regular fa-image me-1"></i>Lihat</span>
+                                        <a href="{{ route('absensi.lampiran', $rec) }}" target="_blank">
+                                            <img src="{{ route('absensi.lampiran', $rec) }}" class="attachment-thumb" title="Lampiran Bukti">
                                         </a>
                                     @else
-                                        <span class="text-muted">—</span>
+                                        <span class="text-muted">-</span>
                                     @endif
                                 </td>
+                                <td style="max-width: 250px;">
+                                    <div class="text-muted small text-truncate" title="{{ $rec->laporan }}">
+                                        {{ $rec->laporan ?: '-' }}
+                                    </div>
+                                </td>
                             </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-        </div>
-    </div>
-
-    @else
-    {{-- TAB 3: TIMELINE PROJECT --}}
-    <div class="timeline-wrap">
-        <div class="filter-bar">
-            <form action="{{ route('absensi.index') }}" method="GET">
-                <input type="hidden" name="tab" value="timeline">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label>Bidang Magang</label>
-                        <select name="bidang_magang" id="timeline_bidang_magang" class="form-select form-select-premium py-2">
-                            <option value="">-- Pilih Bidang --</option>
-                            @foreach ($bidangList as $b)
-                                <option value="{{ $b }}" {{ request('bidang_magang') == $b ? 'selected' : '' }}>{{ $b }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label>Peserta Magang</label>
-                        <select name="user_id" id="timeline_user_id" class="form-select form-select-premium py-2" required disabled>
-                            <option value="" disabled {{ request('user_id') ? '' : 'selected' }}>Pilih bidang terlebih dahulu</option>
-                            @foreach ($users as $u)
-                                <option value="{{ $u->id }}" data-bidang="{{ $u->bidang_magang }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
-                                    {{ $u->nama }}{{ $u->email ? ' - ' . $u->email : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-premium-primary w-100 py-2">
-                            <i class="fa-solid fa-chart-gantt me-1"></i> Lihat Timeline
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        @if (! $timelineUser)
-            <div class="history-card text-center py-5 px-3">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:56px;height:56px;background:rgba(108,92,231,0.06);">
-                    <i class="fa-solid fa-chart-gantt text-primary" style="font-size:1.3rem;"></i>
-                </div>
-                <h6 class="fw-bold">Pilih nama peserta magang</h6>
-                <p class="text-muted small mb-0">Timeline project akan muncul berdasarkan project yang sudah dibuat admin.</p>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
-        @elseif ($timelineProjects->isEmpty())
-            <div class="history-card text-center py-5 px-3">
-                <h6 class="fw-bold">Belum ada project</h6>
-                <p class="text-muted small mb-0">Admin belum membuat timeline project untuk {{ $timelineUser->nama }}.</p>
-            </div>
-        @else
-            @foreach ($timelineProjects as $project)
-                @php
-                    $days = [];
-                    $cursor = $project->tanggal_mulai->copy();
-                    while ($cursor->lte($project->tanggal_selesai)) {
-                        $days[] = $cursor->copy();
-                        $cursor->addDay();
-                    }
-                    $notesByDate = $project->notes->groupBy(fn ($note) => $note->tanggal->toDateString());
-                    $assignmentsByDate = $project->dayAssignments->groupBy(fn ($assignment) => $assignment->tanggal->toDateString());
-                    $doneCount = $project->notes->whereNotNull('selesai_pada')->count();
-                    $totalNotes = $project->notes->count();
-                    $today = now(config('app.timezone'))->toDateString();
-                @endphp
-                <div class="timeline-project">
-                    <div class="timeline-project-head">
-                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
-                            <div>
-                                <h6 class="fw-bold mb-1" style="color:var(--dark);">{{ $project->nama }}</h6>
-                                <div class="text-muted" style="font-size:0.8rem;">
-                                    {{ $project->tanggal_mulai->translatedFormat('d M Y') }} - {{ $project->tanggal_selesai->translatedFormat('d M Y') }}
-                                </div>
-                            </div>
-                            <span class="stat-pill" style="background:rgba(108,92,231,0.1);color:var(--primary);">
-                                {{ $doneCount }}/{{ $totalNotes }} selesai
-                            </span>
-                        </div>
-                        @if ($project->kebutuhan)
-                            <p class="text-muted mb-0 mt-2" style="font-size:0.82rem;">{{ $project->kebutuhan }}</p>
-                        @endif
-                    </div>
-                    <div class="timeline-scroll">
-                        <div class="timeline-days">
-                            @foreach ($days as $day)
-                                @php
-                                    $key = $day->toDateString();
-                                    $dayNotes = $notesByDate->get($key, collect());
-                                    $dayAssignments = $assignmentsByDate->get($key, collect());
-                                    $activeDayNotes = $dayNotes->whereNull('selesai_pada');
-                                    $assignedUsersWithActiveNotes = $activeDayNotes->pluck('user_id')->filter()->unique();
-                                    $visibleDayAssignments = $dayAssignments->reject(fn ($assignment) => $assignedUsersWithActiveNotes->contains($assignment->user_id));
-                                @endphp
-                                <div class="timeline-day {{ $key === $today ? 'today' : '' }}">
-                                    <div class="timeline-day-date">{{ $day->format('d M') }}</div>
-                                    <div class="timeline-day-name">{{ $day->translatedFormat('D') }}</div>
-                                    <div class="day-assignments">
-                                        @foreach ($visibleDayAssignments as $assignment)
-                                            <span class="assignment-chip">
-                                                <i class="fa-solid fa-user-check"></i> {{ $assignment->user->nama ?? '-' }}
-                                            </span>
-                                        @endforeach
-                                    </div>
-                                    @forelse ($activeDayNotes as $note)
-                                        <span class="note-chip note-{{ $note->kategori }} {{ $note->user_selesai_pada ? 'note-done' : '' }}">
-                                            @if ($note->user)
-                                                <span class="d-block" style="font-size:0.64rem;font-weight:800;opacity:0.8;">
-                                                    <i class="fa-solid fa-user me-1"></i>{{ \Illuminate\Support\Str::limit($note->user->nama, 18) }}
-                                                </span>
-                                            @endif
-                                            {{ \Illuminate\Support\Str::limit($note->judul, 26) }}
-                                        </span>
-                                    @empty
-                                        @if ($dayNotes->isNotEmpty())
-                                            <span class="note-chip note-rendah note-done">Selesai</span>
-                                        @else
-                                            <span class="text-muted" style="font-size:0.72rem;">Tidak ada note</span>
-                                        @endif
-                                    @endforelse
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-
-                    @if ($project->notes->isNotEmpty())
-                        <div class="note-list">
-                            @foreach ($project->notes->sortBy('tanggal') as $note)
-                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
-                                    <div>
-                                        <span class="note-chip note-{{ $note->kategori }} {{ $note->selesai_pada ? 'note-done' : '' }}" style="display:inline-block;width:auto;">
-                                            {{ strtoupper($note->kategori_label ?? $note->kategori) }}
-                                        </span>
-                                        <span class="fw-semibold" style="font-size:0.86rem;color:var(--dark);">
-                                            {{ $note->tanggal->translatedFormat('d M') }}
-                                            @if ($note->user)
-                                                - {{ $note->user->nama }}
-                                            @endif
-                                            - {{ $note->judul }}
-                                        </span>
-                                        @if ($note->catatan)
-                                            <div class="text-muted" style="font-size:0.76rem;">{{ $note->catatan }}</div>
-                                        @endif
-                                    </div>
-                                    @if ($note->selesai_pada)
-                                        <span class="stat-pill" style="background:rgba(16,185,129,0.1);color:#047857;">
-                                            Selesai {{ $note->selesai_pada->timezone(config('app.timezone'))->format('d M H:i') }}
-                                        </span>
-                                    @elseif ($note->user_selesai_pada)
-                                        <span class="stat-pill" style="background:rgba(245,158,11,0.1);color:#b45309;">
-                                            <i class="fa-regular fa-clock me-1"></i> Menunggu Konfirmasi
-                                        </span>
-                                    @elseif ($note->user_id && (int) $note->user_id !== (int) $timelineUser->id)
-                                        <span class="text-muted" style="font-size:0.76rem;">Note peserta lain</span>
-                                    @else
-                                        <form action="{{ route('timeline.note.complete', $note) }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="user_id" value="{{ $timelineUser->id }}">
-                                            <input type="hidden" name="redirect_tab" value="timeline">
-                                            <button type="submit" class="btn btn-premium-primary py-2 px-3">
-                                                <i class="fa-solid fa-check me-1"></i> Tandai Selesai
-                                            </button>
-                                        </form>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endforeach
         @endif
     </div>
-    @endif
 </div>
 @endsection
 
 @section('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Form tab: dynamic labels
     const radios = document.querySelectorAll('input[name="status"]');
-    const attendanceForm = document.querySelector('form[action="{{ route('absensi.store') }}"]');
+    const attendanceForm = document.getElementById('attendanceForm');
     const fotoLabel = document.getElementById('foto_label');
     const fotoInput = document.getElementById('foto');
     const laporanLabel = document.getElementById('laporan_label');
@@ -1007,6 +939,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const longitudeInput = document.getElementById('lokasi_longitude');
     const accuracyInput = document.getElementById('lokasi_akurasi');
     const lockLocationButton = document.getElementById('lock_location');
+    const taskSelectionContainer = document.getElementById('task_selection_container');
+    const taskSelectEl = document.getElementById('task_id_select');
     let previewUrl = null;
     let cameraPreviewUrl = null;
     let cameraStream = null;
@@ -1019,10 +953,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (latitudeInput) latitudeInput.value = lat.toFixed(7);
         if (longitudeInput) longitudeInput.value = lng.toFixed(7);
         if (accuracyInput) accuracyInput.value = accuracy ? accuracy.toFixed(2) : '';
-        if (locationStatus) locationStatus.innerText = options.message || 'Lokasi WFH terkunci. Klik Ambil Ulang Lokasi jika posisinya belum tepat.';
+        if (locationStatus) locationStatus.innerText = options.message || 'Lokasi WFH/Kantor terkunci. Klik Kunci Lokasi lagi jika ingin memperbarui.';
         if (locationAccuracy) locationAccuracy.innerText = `Akurasi: ${accuracy ? Math.round(accuracy) : '-'} m`;
         if (locationCoordinates) locationCoordinates.innerText = `Koordinat: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
         if (lockLocationButton) lockLocationButton.innerHTML = '<i class="fa-solid fa-location-crosshairs me-1"></i> Ambil Ulang Lokasi';
+    }
+
+    // Auto load location if GPS is available
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+            setLocation(position, { message: 'Lokasi berhasil terdeteksi otomatis.' });
+        }, () => {
+            // Keep status message default
+        }, { enableHighAccuracy: true, timeout: 10000 });
     }
 
     function setLocationError(message) {
@@ -1039,18 +982,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!locationSection) return;
         locationSection.classList.add('show');
         if (!latitudeInput?.value || !longitudeInput?.value) {
-            if (locationStatus) locationStatus.innerText = 'Klik Kunci Lokasi untuk menyimpan posisi WFH saat ini.';
+            if (locationStatus) locationStatus.innerText = 'Klik Kunci Lokasi untuk memverifikasi GPS absensi Anda.';
         }
     }
 
     function hideLocationSection() {
-        if (locationSection) locationSection.classList.remove('show');
-        setLocationError('Klik Kunci Lokasi untuk menyimpan posisi WFH saat ini.');
+        // GPS location is required for all attendance statuses
+        showLocationSection();
     }
 
     function captureLocationOnce() {
         if (!navigator.geolocation) {
-            return Promise.reject(new Error('Browser ini tidak mendukung geolocation. Gunakan browser lain untuk WFH.'));
+            return Promise.reject(new Error('Browser ini tidak mendukung geolocation. Gunakan browser lain.'));
         }
 
         if (locationStatus) locationStatus.innerText = 'Mengambil lokasi saat ini...';
@@ -1062,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     resolve(position);
                 },
                 () => {
-                    setLocationError('Lokasi belum bisa diambil. Izinkan akses lokasi browser untuk absensi WFH.');
+                    setLocationError('Lokasi belum bisa diambil. Izinkan akses lokasi browser Anda.');
                     reject(new Error('Lokasi belum bisa diambil.'));
                 },
                 { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
@@ -1075,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         cameraPanel.style.display = 'block';
         if (cameraStartActions) cameraStartActions.style.display = 'none';
-        cameraMessage.innerText = 'Membuka kamera...';
+        if (cameraMessage) cameraMessage.innerText = 'Membuka kamera...';
 
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1087,10 +1030,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 audio: false
             });
             cameraVideo.srcObject = cameraStream;
-            cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
+            if (cameraMessage) cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
         } catch (error) {
             if (cameraStartActions) cameraStartActions.style.display = 'flex';
-            cameraMessage.innerText = 'Kamera tidak bisa dibuka. Gunakan upload gambar manual.';
+            if (cameraMessage) cameraMessage.innerText = 'Kamera tidak bisa dibuka. Gunakan upload gambar manual.';
         }
     }
 
@@ -1119,9 +1062,9 @@ document.addEventListener('DOMContentLoaded', function() {
             previewUrl = null;
         }
 
-        fnameSpan.innerText = file.name;
-        fileNameDiv.style.display = 'block';
-        uploadText.innerText = 'Ganti berkas';
+        if (fnameSpan) fnameSpan.innerText = file.name;
+        if (fileNameDiv) fileNameDiv.style.display = 'block';
+        if (uploadText) uploadText.innerText = 'Ganti berkas';
 
         if (fotoPreview && file.type.startsWith('image/')) {
             previewUrl = URL.createObjectURL(file);
@@ -1140,6 +1083,7 @@ document.addEventListener('DOMContentLoaded', function() {
             cameraPreviewUrl = URL.createObjectURL(file);
             cameraPreview.src = cameraPreviewUrl;
             cameraPreview.style.display = 'block';
+            if (cameraVideo) cameraVideo.style.display = 'none';
         }
     }
 
@@ -1152,8 +1096,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     URL.revokeObjectURL(previewUrl);
                     previewUrl = null;
                 }
-                fileNameDiv.style.display = 'none';
-                uploadText.innerText = 'Klik untuk unggah gambar';
+                if (fileNameDiv) fileNameDiv.style.display = 'none';
+                if (uploadText) uploadText.innerText = 'Klik untuk pilih gambar bukti kerja';
                 if (fotoPreview) {
                     fotoPreview.removeAttribute('src');
                     fotoPreview.style.display = 'none';
@@ -1180,7 +1124,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 transfer.items.add(file);
                 fotoKameraInput.files = transfer.files;
                 setCameraPreviewFromFile(file);
-                cameraMessage.innerText = 'Foto berhasil diambil dan siap dikirim.';
+                if (cameraMessage) cameraMessage.innerText = 'Foto berhasil diambil dan siap dikirim.';
             }, 'image/jpeg', 0.9);
         });
     }
@@ -1196,11 +1140,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Lokasi belum bisa dikunci',
-                        text: error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi WFH.',
+                        text: error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi.',
                         confirmButtonColor: '#6c5ce7'
                     });
                 } else {
-                    alert(error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi WFH.');
+                    alert(error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi.');
                 }
             });
         });
@@ -1208,9 +1152,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (attendanceForm) {
         attendanceForm.addEventListener('submit', function(e) {
-            const checked = document.querySelector('input[name="status"]:checked');
-            const needsCamera = checked && ['hadir'].includes(checked.value);
-            const needsLocation = checked && checked.value === 'wfh';
+            const checked = document.querySelector('input[name="status"]:checked') || document.getElementById('status_checkout');
+            const statusVal = checked ? checked.value : '';
+            const isCheckout = !!document.getElementById('status_checkout');
+            
+            const needsCamera = (!isCheckout && ['hadir', 'wfh', 'sakit'].includes(statusVal)) || (isCheckout && statusVal === 'sakit');
+            const needsLocation = true; // GPS location is required for all attendance statuses
 
             if (needsCamera && (!fotoKameraInput || fotoKameraInput.files.length === 0)) {
                 e.preventDefault();
@@ -1218,11 +1165,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Foto kamera belum diambil',
-                        text: 'Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir.',
+                        text: 'Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu sebagai bukti kehadiran.',
                         confirmButtonColor: '#6c5ce7'
                     });
                 } else {
-                    alert('Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu untuk status Hadir.');
+                    alert('Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu.');
                 }
                 return;
             }
@@ -1233,12 +1180,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (window.Swal) {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'Lokasi WFH belum dikunci',
-                            text: 'Klik Kunci Lokasi terlebih dahulu sebelum mengirim absensi WFH.',
+                            title: 'Lokasi belum dikunci',
+                            text: 'Klik Kunci Lokasi terlebih dahulu sebelum mengirim absensi.',
                             confirmButtonColor: '#6c5ce7'
                         });
                     } else {
-                        alert('Klik Kunci Lokasi terlebih dahulu sebelum mengirim absensi WFH.');
+                        alert('Klik Kunci Lokasi terlebih dahulu sebelum mengirim absensi.');
                     }
                 }
             }
@@ -1246,32 +1193,75 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateLabels() {
-        const checked = document.querySelector('input[name="status"]:checked');
-        if (!checked || !fotoLabel) return;
+        const checked = document.querySelector('input[name="status"]:checked') || document.getElementById('status_checkout');
+        if (!checked) return;
         const v = checked.value;
+        const isCheckout = !!document.getElementById('status_checkout');
+
         const map = {
             hadir: ['Lampiran Tambahan (Opsional)', false, 'Laporan Pekerjaan Harian', 'Deskripsi pekerjaan hari ini...'],
             wfh: ['Lampiran Tambahan (Opsional)', false, 'Rencana & Progres WFH', 'Tuliskan project/task yang dikerjakan dari rumah hari ini...'],
-            sakit: ['Surat Keterangan Sakit', true, 'Keterangan Sakit', 'Rincian kondisi kesehatan...'],
+            sakit: ['Surat Keterangan Sakit', !isCheckout, 'Keterangan Sakit', 'Rincian kondisi kesehatan...'],
             izin: ['Lampiran Izin (Opsional)', false, 'Alasan Izin', 'Alasan pengajuan izin...']
         };
-        const m = map[v];
-        fotoLabel.innerHTML = m[0] + (m[1] ? ' <span class="text-danger">*</span>' : '');
-        if (fotoInput) fotoInput.required = m[1];
-        if (laporanLabel) laporanLabel.innerHTML = m[2] + ' <span class="text-danger">*</span>';
-        if (laporanInput) laporanInput.placeholder = m[3];
-        if (['hadir'].includes(v)) {
+        const m = map[v] || ['Lampiran', false, 'Catatan', 'Keterangan tambahan...'];
+        
+        if (fotoLabel) {
+            fotoLabel.innerHTML = m[0] + (m[1] ? ' <span class="text-danger">*</span>' : '');
+        }
+        if (fotoInput) {
+            fotoInput.required = m[1];
+        }
+        if (laporanLabel) {
+            laporanLabel.innerHTML = m[2] + (v === 'izin' || (isCheckout && ['hadir', 'wfh'].includes(v)) ? ' <span class="text-danger">*</span>' : '');
+        }
+        if (laporanInput) {
+            laporanInput.placeholder = m[3];
+            laporanInput.required = v === 'izin' || (isCheckout && ['hadir', 'wfh'].includes(v));
+        }
+
+        // Update GPS Location label & description dynamically
+        const locationLabel = document.getElementById('location_label');
+        if (locationLabel) {
+            if (v === 'wfh') {
+                locationLabel.innerHTML = 'Lokasi WFH <span class="text-danger">*</span>';
+            } else if (v === 'hadir') {
+                locationLabel.innerHTML = 'Lokasi Hadir (Kantor) <span class="text-danger">*</span>';
+            } else {
+                locationLabel.innerHTML = 'Lokasi Presensi <span class="text-danger">*</span>';
+            }
+        }
+        const locStatusText = document.getElementById('location_status');
+        if (locStatusText && (!latitudeInput?.value || !longitudeInput?.value)) {
+            if (v === 'wfh') {
+                locStatusText.innerText = 'Klik Kunci Lokasi untuk menyimpan posisi WFH.';
+            } else if (v === 'hadir') {
+                locStatusText.innerText = 'Klik Kunci Lokasi untuk memverifikasi posisi Anda di kantor.';
+            } else {
+                locStatusText.innerText = 'Klik Kunci Lokasi untuk memverifikasi GPS absensi Anda.';
+            }
+        }
+
+        // Show/hide task selection dropdown (only on check-in when user has no active task but has available tasks)
+        if (!isCheckout && taskSelectionContainer && taskSelectEl) {
+            if (['hadir', 'wfh'].includes(v)) {
+                taskSelectionContainer.style.display = 'block';
+                taskSelectEl.required = true;
+            } else {
+                taskSelectionContainer.style.display = 'none';
+                taskSelectEl.required = false;
+                taskSelectEl.value = '';
+            }
+        }
+
+        // Show/hide camera section
+        const showCamera = (!isCheckout && ['hadir', 'wfh', 'sakit'].includes(v)) || (isCheckout && v === 'sakit');
+        if (showCamera) {
             if (cameraSection) cameraSection.style.display = 'block';
             if (!cameraStream && cameraPanel) cameraPanel.style.display = 'none';
             if (!cameraStream && cameraStartActions) cameraStartActions.style.display = 'flex';
             if (cameraLabel) {
                 cameraLabel.innerHTML = 'Foto Kamera <span class="text-danger">*</span>';
-            }
-            if (cameraStartMessage) {
-                cameraStartMessage.innerText = 'Nyalakan kamera lalu ambil foto untuk absensi hadir.';
-            }
-            if (cameraMessage) {
-                cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
             }
         } else {
             if (cameraSection) cameraSection.style.display = 'none';
@@ -1289,132 +1279,12 @@ document.addEventListener('DOMContentLoaded', function() {
             stopCamera();
         }
 
-        if (v === 'wfh') {
-            showLocationSection();
-        } else {
-            hideLocationSection();
-        }
+        // Show/hide location section
+        hideLocationSection();
     }
 
     radios.forEach(r => r.addEventListener('change', updateLabels));
     updateLabels();
-
-    // Rekap tab: toggle filter fields
-    const filterType = document.getElementById('filter_type');
-    const dateFilter = document.getElementById('dateFilter');
-    const monthFilter = document.getElementById('monthFilter');
-
-    function toggleFilterFields() {
-        if (!filterType) return;
-        const value = filterType.value;
-        dateFilter?.classList.toggle('show', value === 'date');
-        monthFilter?.classList.toggle('show', value === 'month');
-    }
-
-    filterType?.addEventListener('change', toggleFilterFields);
-    toggleFilterFields();
-
-    // Rekap tab: Bidang filter to user_id dropdown
-    const bidangSelect = document.getElementById('rekap_bidang_magang');
-    const userSelect = document.getElementById('rekap_user_id');
-    if (bidangSelect && userSelect) {
-        const allUserOptions = Array.from(userSelect.querySelectorAll('option')).map(opt => ({
-            value: opt.value,
-            text: opt.textContent,
-            bidang: opt.getAttribute('data-bidang') || ''
-        }));
-
-        function updateUsers() {
-            const selectedBidang = bidangSelect.value;
-            userSelect.innerHTML = '';
-
-            if (!selectedBidang) {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Pilih bidang terlebih dahulu';
-                userSelect.appendChild(placeholder);
-                userSelect.disabled = true;
-            } else {
-                userSelect.disabled = false;
-                
-                // Add "Semua peserta magang" option
-                const allOpt = document.createElement('option');
-                allOpt.value = '';
-                allOpt.textContent = 'Semua peserta magang';
-                userSelect.appendChild(allOpt);
-
-                // Add matching users
-                const selectedUserId = "{{ request('user_id') }}";
-                allUserOptions.forEach(opt => {
-                    if (opt.bidang === selectedBidang) {
-                        const newOpt = document.createElement('option');
-                        newOpt.value = opt.value;
-                        newOpt.textContent = opt.text;
-                        if (opt.value === selectedUserId) {
-                            newOpt.selected = true;
-                        }
-                        userSelect.appendChild(newOpt);
-                    }
-                });
-            }
-        }
-
-        bidangSelect.addEventListener('change', updateUsers);
-        updateUsers();
-    }
-
-    // Timeline tab: Bidang filter to user_id dropdown
-    const timelineBidangSelect = document.getElementById('timeline_bidang_magang');
-    const timelineUserSelect = document.getElementById('timeline_user_id');
-    if (timelineBidangSelect && timelineUserSelect) {
-        const allTimelineUserOptions = Array.from(timelineUserSelect.querySelectorAll('option')).map(opt => ({
-            value: opt.value,
-            text: opt.textContent,
-            bidang: opt.getAttribute('data-bidang') || ''
-        }));
-
-        function updateTimelineUsers() {
-            const selectedBidang = timelineBidangSelect.value;
-            timelineUserSelect.innerHTML = '';
-
-            if (!selectedBidang) {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Pilih bidang terlebih dahulu';
-                placeholder.disabled = true;
-                placeholder.selected = true;
-                timelineUserSelect.appendChild(placeholder);
-                timelineUserSelect.disabled = true;
-            } else {
-                timelineUserSelect.disabled = false;
-                
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Pilih nama untuk melihat timeline...';
-                placeholder.disabled = true;
-                placeholder.selected = !("{{ request('user_id') }}");
-                timelineUserSelect.appendChild(placeholder);
-
-                // Add matching users
-                const selectedUserId = "{{ request('user_id') }}";
-                allTimelineUserOptions.forEach(opt => {
-                    if (opt.bidang === selectedBidang) {
-                        const newOpt = document.createElement('option');
-                        newOpt.value = opt.value;
-                        newOpt.textContent = opt.text;
-                        if (opt.value === selectedUserId) {
-                            newOpt.selected = true;
-                        }
-                        timelineUserSelect.appendChild(newOpt);
-                    }
-                });
-            }
-        }
-
-        timelineBidangSelect.addEventListener('change', updateTimelineUsers);
-        updateTimelineUsers();
-    }
-
 });
 </script>
 @endsection

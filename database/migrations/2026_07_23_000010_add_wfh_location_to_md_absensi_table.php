@@ -21,7 +21,7 @@ return new class extends Migration
             }
 
             if (! Schema::hasColumn('md_absensi', 'lokasi_akurasi')) {
-                $table->decimal('lokasi_akurasi', 8, 2)->nullable()->after('lokasi_longitude');
+                $table->decimal('lokasi_akurasi', 12, 2)->nullable()->after('lokasi_longitude');
             }
 
             if (! Schema::hasColumn('md_absensi', 'lokasi_diambil_pada')) {
