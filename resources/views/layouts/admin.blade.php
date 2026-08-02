@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Admin Dashboard')</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>@yield('title', 'SIMALAM - Dashboard Admin')</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,9 +42,10 @@
         }
 
         .admin-wrap {
-            max-width: 1100px;
+            width: min(100% - 2rem, 1440px);
+            max-width: 1440px;
             margin: 0 auto;
-            padding: 2.5rem 1.25rem 3rem;
+            padding: 2rem 0 2.75rem;
         }
 
         .admin-logo {
@@ -63,7 +65,7 @@
         .admin-card {
             background: var(--white);
             border: 1px solid var(--border);
-            border-radius: 20px;
+            border-radius: 8px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
 
@@ -244,6 +246,7 @@
 
         .data-table {
             width: 100%;
+            min-width: 980px;
             border-collapse: collapse;
         }
 
@@ -254,13 +257,14 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.6px;
-            padding: 0.85rem 1.25rem;
+            padding: 0.78rem 1rem;
             border: none;
             text-align: left;
+            white-space: nowrap;
         }
 
         .data-table tbody td {
-            padding: 1rem 1.25rem;
+            padding: 0.85rem 1rem;
             border-bottom: 1px solid var(--border);
             font-size: 0.88rem;
             vertical-align: middle;
@@ -364,7 +368,7 @@
         .btn-action.danger:hover { background: #fef2f2; color: var(--red); border-color: #fecaca; }
 
         .modal-clean .modal-content {
-            border-radius: 20px;
+            border-radius: 12px;
             border: 1px solid var(--border);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
         }
@@ -388,11 +392,26 @@
             color: var(--dark);
             margin-bottom: 0.4rem;
         }
+
+        .admin-footer {
+            width: min(100% - 2rem, 1440px);
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 1.25rem 0 1.75rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-light);
+            font-size: 0.78rem;
+            text-align: center;
+        }
     </style>
     @yield('styles')
 </head>
 <body>
     @yield('content')
+
+    <footer class="admin-footer">
+        &copy; {{ date('Y') }} SIMALAM &middot; Sistem Informasi Monitoring Absensi dan Laporan Magang
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -423,6 +442,46 @@
         @if (session('error_swal'))
             Swal.fire({ icon:'error', title:'Gagal', text:"{{ session('error_swal') }}", confirmButtonColor:'#6366f1', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
         @endif
+        @if (session('error'))
+            Swal.fire({ icon:'warning', title:'Perhatian', text:"{{ session('error') }}", confirmButtonColor:'#6366f1', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
+        @endif
+
+        // Global CSRF Token Keep-Alive & Auto-Sync
+        function updateCsrfTokens(token) {
+            if (!token) return;
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) meta.setAttribute('content', token);
+            document.querySelectorAll('input[name="_token"]').forEach(input => {
+                input.value = token;
+            });
+        }
+
+        async function syncCsrfToken() {
+            try {
+                const res = await fetch("{{ route('refresh.csrf') }}", {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.csrf_token) {
+                        updateCsrfTokens(data.csrf_token);
+                    }
+                }
+            } catch (e) {
+                // Silently handle offline/temporary network hiccups
+            }
+        }
+
+        // Periodic sync every 10 minutes
+        setInterval(syncCsrfToken, 10 * 60 * 1000);
+
+        // Sync token whenever user switches back to this tab
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                syncCsrfToken();
+            }
+        });
+        window.addEventListener('focus', syncCsrfToken);
     </script>
     @yield('scripts')
 </body>

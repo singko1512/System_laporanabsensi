@@ -38,7 +38,7 @@ return new class extends Migration
 
         // Set default value of status column to 'belum_dikerjakan'
         DB::statement("ALTER TABLE md_project_tasks MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'belum_dikerjakan'");
-        
+
         // Update existing tasks to have status 'belum_dikerjakan'
         DB::table('md_project_tasks')->where('status', 'open')->update(['status' => 'belum_dikerjakan']);
 
@@ -62,15 +62,15 @@ return new class extends Migration
 
         Schema::table('md_project_tasks', function (Blueprint $table) {
             DB::statement("ALTER TABLE md_project_tasks MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'open'");
-            
+
             $table->dropForeign(['user_id']);
-            
+
             $table->dropColumn([
                 'user_id',
                 'catatan_revisi',
                 'file_lampiran',
                 'laporan_kerja',
-                'tanggal_selesai_kerja'
+                'tanggal_selesai_kerja',
             ]);
         });
 

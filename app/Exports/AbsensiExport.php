@@ -18,6 +18,8 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
 
     protected int $year;
 
+    protected ?int $bidangId;
+
     protected int $totalWorkdays;
 
     protected string $namaBulan;
@@ -26,10 +28,11 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
 
     protected int $dataStartRow = 6;
 
-    public function __construct(int $month, int $year)
+    public function __construct(int $month, int $year, ?int $bidangId = null)
     {
         $this->month = $month;
         $this->year = $year;
+        $this->bidangId = $bidangId;
         $this->namaBulan = Carbon::createFromDate($year, $month, 1)->translatedFormat('F');
         $this->totalWorkdays = $this->calculateWorkdays();
     }
@@ -58,16 +61,22 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
         $startDate = Carbon::createFromDate($this->year, $this->month, 1)->startOfMonth();
         $endDate = Carbon::createFromDate($this->year, $this->month, 1)->endOfMonth();
 
-        $users = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
+        $usersQuery = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
             $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->with('statusMaster');
-        }])->orderBy('nama', 'asc')->get();
+        }])->where('role', 'user')->orderBy('nama', 'asc');
+
+        if ($this->bidangId) {
+            $usersQuery->where('bidang_id', $this->bidangId);
+        }
+
+        $users = $usersQuery->get();
 
         $rows = [
             ['REKAPITULASI ABSENSI PESERTA MAGANG'],
-            ['Bulan / Tahun', $this->namaBulan . ' ' . $this->year],
-            ['Hari Kerja Efektif', $this->totalWorkdays . ' Hari'],
-            ['Tanggal Cetak', Carbon::now()->translatedFormat('d F Y, H:i') . ' WIB'],
+            ['Bulan / Tahun', $this->namaBulan.' '.$this->year],
+            ['Hari Kerja Efektif', $this->totalWorkdays.' Hari'],
+            ['Tanggal Cetak', Carbon::now()->translatedFormat('d F Y, H:i').' WIB'],
             ['No', 'Nama Peserta Magang', 'NIP / ID', 'Pembimbing Magang', 'Bidang Magang', 'Hadir', 'WFH', 'Sakit', 'Izin', 'Persentase Kehadiran'],
         ];
 
@@ -77,7 +86,7 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
             $wfh = $user->absensi->where('status', 'wfh')->count();
             $sakit = $user->absensi->where('status', 'sakit')->count();
             $izin = $user->absensi->where('status', 'izin')->count();
-            $persentase = round((($hadir + $wfh) / $this->totalWorkdays) * 100, 1) . '%';
+            $persentase = round((($hadir + $wfh) / $this->totalWorkdays) * 100, 1).'%';
 
             $rows[] = [
                 $no++,
@@ -113,7 +122,7 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
                     'font' => ['bold' => true, 'color' => ['rgb' => '475569']],
                 ]);
 
-                $sheet->getStyle('A5:J' . $lastRow)->applyFromArray([
+                $sheet->getStyle('A5:J'.$lastRow)->applyFromArray([
                     'borders' => [
                         'allBorders' => [
                             'borderStyle' => Border::BORDER_THIN,
@@ -135,12 +144,12 @@ class AbsensiExport implements FromArray, ShouldAutoSize, WithEvents
                 ]);
 
                 if ($lastRow >= $this->dataStartRow) {
-                    $sheet->getStyle('A' . $this->dataStartRow . ':A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle('F' . $this->dataStartRow . ':J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle('A'.$this->dataStartRow.':A'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle('F'.$this->dataStartRow.':J'.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                     for ($row = $this->dataStartRow; $row <= $lastRow; $row++) {
                         if ($row % 2 === 0) {
-                            $sheet->getStyle('A' . $row . ':J' . $row)->applyFromArray([
+                            $sheet->getStyle('A'.$row.':J'.$row)->applyFromArray([
                                 'fill' => [
                                     'fillType' => Fill::FILL_SOLID,
                                     'startColor' => ['rgb' => 'F8FAFC'],

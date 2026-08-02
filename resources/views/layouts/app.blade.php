@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Absensi Harian - Employee Attendance System')</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>@yield('title', 'SIMALAM - Sistem Informasi Monitoring Absensi dan Laporan Magang')</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -119,7 +120,7 @@
         .glass-card {
             background: var(--white);
             border: 1px solid var(--border);
-            border-radius: 20px;
+            border-radius: 12px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.03);
             transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
@@ -241,8 +242,8 @@
                     <i class="fa-solid fa-calendar-check"></i>
                 </div>
                 <div class="nav-brand-text">
-                    <strong>Absensi Harian</strong>
-                    <span>Employee Attendance System</span>
+                    <strong>SIMALAM</strong>
+                    <span>Sistem Informasi Monitoring Absensi dan Laporan Magang</span>
                 </div>
             </a>
 
@@ -315,7 +316,7 @@
     <!-- Footer -->
     <footer>
         <div class="container">
-            &copy; {{ date('Y') }} AbsensiKita &middot; Sistem Laporan Absensi Magang
+            &copy; {{ date('Y') }} SIMALAM &middot; Sistem Informasi Monitoring Absensi dan Laporan Magang
         </div>
     </footer>
 
@@ -343,15 +344,64 @@
 
         installInspectGuards();
 
+        @if ($errors->any())
+            Swal.fire({
+                icon: 'error',
+                title: 'Validasi Gagal',
+                html: `{!! implode('<br>', $errors->all()) !!}`,
+                confirmButtonColor: '#6c5ce7',
+                customClass: { popup: 'rounded-4 border-0 shadow-lg', confirmButton: 'rounded-3 px-4' }
+            });
+        @endif
         @if (session('success_swal'))
             Swal.fire({ icon:'success', title:'Berhasil', text:"{{ session('success_swal') }}", confirmButtonColor:'#6c5ce7', timer:3000, customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
         @endif
         @if (session('error_swal'))
             Swal.fire({ icon:'error', title:'Gagal', text:"{{ session('error_swal') }}", confirmButtonColor:'#6c5ce7', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
         @endif
-        @if (session('error'))
-            Swal.fire({ icon:'warning', title:'Akses Ditolak', text:"{{ session('error') }}", confirmButtonColor:'#6c5ce7', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
+        @if (session('warning_swal'))
+            Swal.fire({ icon:'warning', title:'Perhatian', text:"{{ session('warning_swal') }}", confirmButtonColor:'#6c5ce7', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
         @endif
+        @if (session('error'))
+            Swal.fire({ icon:'warning', title:'Perhatian', text:"{{ session('error') }}", confirmButtonColor:'#6c5ce7', customClass:{popup:'rounded-4 border-0 shadow-lg', confirmButton:'rounded-3 px-4'} });
+        @endif
+
+        // Global CSRF Token Keep-Alive & Auto-Sync
+        function updateCsrfTokens(token) {
+            if (!token) return;
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) meta.setAttribute('content', token);
+            document.querySelectorAll('input[name="_token"]').forEach(input => {
+                input.value = token;
+            });
+        }
+
+        async function syncCsrfToken() {
+            try {
+                const res = await fetch("{{ route('refresh.csrf') }}", {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.csrf_token) {
+                        updateCsrfTokens(data.csrf_token);
+                    }
+                }
+            } catch (e) {
+                // Silently handle offline/temporary network hiccups
+            }
+        }
+
+        // Periodic sync every 10 minutes
+        setInterval(syncCsrfToken, 10 * 60 * 1000);
+
+        // Sync token whenever user switches back to this tab
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                syncCsrfToken();
+            }
+        });
+        window.addEventListener('focus', syncCsrfToken);
     </script>
     @yield('scripts')
 </body>

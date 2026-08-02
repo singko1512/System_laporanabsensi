@@ -98,7 +98,7 @@
     <!-- Report Header -->
     <div class="header">
         <h2>Laporan Rekapitulasi Absensi Peserta Magang</h2>
-        <p>Sistem Laporan Absensi Harian Terintegrasi - AbsensiKita</p>
+        <p>SIMALAM - Sistem Informasi Monitoring Absensi dan Laporan Magang</p>
     </div>
 
     <!-- Metadata Info -->
@@ -160,7 +160,7 @@
             <p><strong>Penanggung Jawab</strong></p>
             <div class="signature-space"></div>
             <p style="border-bottom: 1px solid #333; padding-bottom: 2px; display: inline-block; width: 100%;"></p>
-            <p style="margin-top: 3px;">Sistem AbsensiKita</p>
+            <p style="margin-top: 3px;">SIMALAM</p>
         </div>
     </div>
 

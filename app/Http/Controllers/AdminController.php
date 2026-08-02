@@ -2,29 +2,31 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use App\Models\Bidang;
+use App\Exports\AbsensiExport;
 use App\Models\Absensi;
-use App\Models\Pengaturan;
+use App\Models\ActivityLog;
+use App\Models\Bidang;
 use App\Models\JadwalMingguan;
 use App\Models\MasterData;
 use App\Models\PembimbingMagang;
 use App\Models\Project;
 use App\Models\ProjectModule;
 use App\Models\ProjectTask;
-use App\Models\ActivityLog;
-use App\Http\Controllers\AuthController;
+use App\Models\User;
+use App\Support\CertificatePayload;
+use App\Support\CertificateTemplate;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\AbsensiExport;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 class AdminController extends Controller
 {
@@ -71,12 +73,13 @@ class AdminController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $adminRole = Auth::user()->role;
+        $currentAdmin = Auth::user();
+        $adminRole = $currentAdmin->role;
         $isSuperAdmin = $adminRole === 'superadmin';
         $activeAdminTab = (string) $request->input('tab', $isSuperAdmin ? 'rekap' : 'pegawai');
         $allowedTabs = $isSuperAdmin
             ? ['rekap', 'pegawai', 'jadwal', 'timeline', 'sertifikat', 'bidang']
-            : ['pegawai', 'sertifikat'];
+            : ['pegawai', 'jadwal', 'timeline', 'sertifikat'];
 
         if (! in_array($activeAdminTab, $allowedTabs, true)) {
             return redirect()
@@ -84,20 +87,34 @@ class AdminController extends Controller
                 ->with('error_swal', 'Role Anda tidak memiliki akses ke menu tersebut.');
         }
 
-        $users = User::with(['jadwalMingguan', 'bidang', 'pembimbingMagang'])->where('role', 'user')->orderBy('nama', 'asc')->get();
+        $adminBidangScope = $this->resolveAdminBidangScope($request, $currentAdmin, $isSuperAdmin);
+        $activeBidangId = $adminBidangScope?->id;
+        $adminBidangOptions = Bidang::orderBy('nama', 'asc')->get();
+
+        $usersQuery = User::with(['jadwalMingguan', 'bidang', 'pembimbingMagang'])
+            ->where('role', 'user')
+            ->orderBy('nama', 'asc');
+        $this->applyUserBidangScope($usersQuery, $adminBidangScope);
+        $users = $usersQuery->get();
+
         $magangSearch = trim((string) $request->input('magang_search', ''));
         $pembimbingMagang = trim((string) $request->input('pembimbing_magang', ''));
 
-        $pembimbingOptions = PembimbingMagang::with('bidang')->orderBy('nama', 'asc')->get();
+        $pembimbingOptionsQuery = PembimbingMagang::with('bidang')->orderBy('nama', 'asc');
+        if ($adminBidangScope) {
+            $pembimbingOptionsQuery->where('bidang_id', $adminBidangScope->id);
+        }
+        $pembimbingOptions = $pembimbingOptionsQuery->get();
 
         $magangQuery = User::with(['bidang', 'pembimbingMagang'])->where('role', 'user')->orderBy('pembimbing_magang')->orderBy('nama');
+        $this->applyUserBidangScope($magangQuery, $adminBidangScope);
 
         if ($magangSearch !== '') {
             $magangQuery->where(function ($query) use ($magangSearch) {
-                $query->where('nama', 'like', '%' . $magangSearch . '%')
-                    ->orWhere('email', 'like', '%' . $magangSearch . '%')
-                    ->orWhere('bidang_magang', 'like', '%' . $magangSearch . '%')
-                    ->orWhere('pembimbing_magang', 'like', '%' . $magangSearch . '%');
+                $query->where('nama', 'like', '%'.$magangSearch.'%')
+                    ->orWhere('email', 'like', '%'.$magangSearch.'%')
+                    ->orWhere('bidang_magang', 'like', '%'.$magangSearch.'%')
+                    ->orWhere('pembimbing_magang', 'like', '%'.$magangSearch.'%');
             });
         }
 
@@ -124,9 +141,15 @@ class AdminController extends Controller
             ->orderBy('tanggal', 'desc')
             ->orderBy('created_at', 'desc');
 
+        if ($adminBidangScope) {
+            $absensiQuery->whereHas('user', function ($query) use ($adminBidangScope) {
+                $this->applyUserBidangScope($query, $adminBidangScope);
+            });
+        }
+
         if ($search !== '') {
             $absensiQuery->whereHas('user', function ($query) use ($search) {
-                $query->where('nama', 'like', '%' . $search . '%');
+                $query->where('nama', 'like', '%'.$search.'%');
             });
         }
 
@@ -137,53 +160,103 @@ class AdminController extends Controller
 
         $absensiRecords = $absensiQuery->get();
         $selesaiProjectStatusId = MasterData::idFor(MasterData::PROJECT_STATUS, 'selesai');
-        $projects = Project::with([
-                'user',
-                'members',
-                'statusMaster',
-                'notes.user',
-                'notes.kategoriMaster',
-                'dayAssignments.user',
-                'modules.tasks.user',
-                'tasks.user',
-            ])
+        $projectsQuery = Project::with([
+            'user',
+            'members',
+            'statusMaster',
+            'notes.user',
+            'notes.kategoriMaster',
+            'dayAssignments.user',
+            'modules.tasks.user',
+            'tasks.user',
+        ])
             ->orderByRaw('status_id = ? asc', [$selesaiProjectStatusId])
-            ->orderBy('tanggal_mulai', 'desc')
-            ->get();
+            ->orderBy('tanggal_mulai', 'desc');
+        $this->applyProjectBidangScope($projectsQuery, $adminBidangScope);
+        $projects = $projectsQuery->get();
 
         $bidangs = Bidang::orderBy('nama', 'asc')->get();
-        $pembimbingMagangs = $pembimbingOptions;
-        $sertifikatUsers = User::query()
+        $manageableBidangs = $adminBidangScope && ! $isSuperAdmin
+            ? $bidangs->where('id', $adminBidangScope->id)->values()
+            : $bidangs;
+        $pembimbingMagangsQuery = PembimbingMagang::with('bidang')->orderBy('nama', 'asc');
+        if ($adminBidangScope) {
+            $pembimbingMagangsQuery->where('bidang_id', $adminBidangScope->id);
+        }
+        $pembimbingMagangs = $pembimbingMagangsQuery->get();
+        $sertifikatUsersQuery = User::query()
             ->where('role', 'user')
             ->orderByRaw('tanggal_selesai_magang is null asc')
             ->orderBy('tanggal_selesai_magang', 'desc')
-            ->orderBy('nama', 'asc')
-            ->get();
+            ->orderBy('nama', 'asc');
+        $this->applyUserBidangScope($sertifikatUsersQuery, $adminBidangScope);
+        $sertifikatUsers = $sertifikatUsersQuery->get();
 
         // 1. Jumlah Project, Module, Task
-        $projectCount = Project::count();
-        $moduleCount = ProjectModule::count();
-        $taskCount = ProjectTask::count();
+        $projectCountQuery = Project::query();
+        $this->applyProjectBidangScope($projectCountQuery, $adminBidangScope);
+        $projectCount = $projectCountQuery->count();
+
+        $moduleCountQuery = ProjectModule::query();
+        if ($adminBidangScope) {
+            $moduleCountQuery->whereHas('project', function ($query) use ($adminBidangScope) {
+                $this->applyProjectBidangScope($query, $adminBidangScope);
+            });
+        }
+        $moduleCount = $moduleCountQuery->count();
+
+        $taskCountQuery = ProjectTask::query();
+        if ($adminBidangScope) {
+            $taskCountQuery->whereHas('project', function ($query) use ($adminBidangScope) {
+                $this->applyProjectBidangScope($query, $adminBidangScope);
+            });
+        }
+        $taskCount = $taskCountQuery->count();
 
         // 2. Project Aktif & Selesai
-        $selesaiStatusId = \App\Models\MasterData::idFor(\App\Models\MasterData::PROJECT_STATUS, 'selesai');
-        $projectAktifCount = Project::where(function($q) use ($selesaiStatusId) {
+        $selesaiStatusId = MasterData::idFor(MasterData::PROJECT_STATUS, 'selesai');
+        $projectAktifQuery = Project::where(function ($q) use ($selesaiStatusId) {
             $q->whereNull('status_id')->orWhere('status_id', '!=', $selesaiStatusId);
-        })->count();
+        });
+        $this->applyProjectBidangScope($projectAktifQuery, $adminBidangScope);
+        $projectAktifCount = $projectAktifQuery->count();
 
-        $projectSelesaiCount = Project::where('status_id', $selesaiStatusId)->count();
+        $projectSelesaiQuery = Project::where('status_id', $selesaiStatusId);
+        $this->applyProjectBidangScope($projectSelesaiQuery, $adminBidangScope);
+        $projectSelesaiCount = $projectSelesaiQuery->count();
 
         // 3. Task Menunggu Review & Terlambat
-        $taskReviewCount = ProjectTask::where('status', 'review')->count();
-        $taskTerlambatCount = ProjectTask::where('status', '!=', 'selesai')
+        $taskReviewQuery = ProjectTask::where('status', 'review');
+        if ($adminBidangScope) {
+            $taskReviewQuery->whereHas('project', function ($query) use ($adminBidangScope) {
+                $this->applyProjectBidangScope($query, $adminBidangScope);
+            });
+        }
+        $taskReviewCount = $taskReviewQuery->count();
+
+        $taskTerlambatQuery = ProjectTask::where('status', '!=', 'selesai')
             ->where('tanggal_selesai', '<', now()->toDateString())
-            ->count();
+            ->whereNotNull('tanggal_selesai');
+        if ($adminBidangScope) {
+            $taskTerlambatQuery->whereHas('project', function ($query) use ($adminBidangScope) {
+                $this->applyProjectBidangScope($query, $adminBidangScope);
+            });
+        }
+        $taskTerlambatCount = $taskTerlambatQuery->count();
 
         // 4. Peserta Magang Aktif
-        $pesertaAktifCount = User::where('role', 'user')->where('status_akun', 'aktif')->count();
+        $pesertaAktifQuery = User::where('role', 'user')->where('status_akun', 'aktif');
+        $this->applyUserBidangScope($pesertaAktifQuery, $adminBidangScope);
+        $pesertaAktifCount = $pesertaAktifQuery->count();
 
         // 5. Statistik Kehadiran Hari Ini
-        $todayAbsens = Absensi::with('statusMaster')->where('tanggal', now()->toDateString())->get();
+        $todayAbsensQuery = Absensi::with('statusMaster')->where('tanggal', now()->toDateString());
+        if ($adminBidangScope) {
+            $todayAbsensQuery->whereHas('user', function ($query) use ($adminBidangScope) {
+                $this->applyUserBidangScope($query, $adminBidangScope);
+            });
+        }
+        $todayAbsens = $todayAbsensQuery->get();
         $hadirCount = 0;
         $wfhCount = 0;
         $sakitCount = 0;
@@ -203,14 +276,41 @@ class AdminController extends Controller
         $belumAbsenCount = max(0, $pesertaAktifCount - $todayAbsens->count());
 
         // 6. Activity Log
-        $activityLogs = ActivityLog::with(['user', 'project'])
+        $activityLogsQuery = ActivityLog::with(['user', 'project'])
             ->orderBy('created_at', 'desc')
-            ->take(50)
-            ->get();
+            ->take(50);
+        if ($adminBidangScope) {
+            $activityLogsQuery->where(function ($query) use ($adminBidangScope) {
+                $query->whereHas('user', function ($userQuery) use ($adminBidangScope) {
+                    $this->applyUserBidangScope($userQuery, $adminBidangScope);
+                })->orWhereHas('project', function ($projectQuery) use ($adminBidangScope) {
+                    $this->applyProjectBidangScope($projectQuery, $adminBidangScope);
+                });
+            });
+        }
+        $activityLogs = $activityLogsQuery->get();
+
+        $pendingTasksQuery = ProjectTask::with(['user', 'project', 'module'])
+            ->where('status', 'review')
+            ->latest('updated_at');
+        if ($adminBidangScope) {
+            $pendingTasksQuery->whereHas('project', function ($query) use ($adminBidangScope) {
+                $this->applyProjectBidangScope($query, $adminBidangScope);
+            });
+        }
+        $pendingTasks = $pendingTasksQuery->get();
+
+        // 7. Available Teams & Landing Schedule View Setting
+        $availableTeams = self::getAvailableTeams();
+        $jadwalLandingView = self::getLandingScheduleView($activeBidangId);
+        $certificateTemplate = CertificateTemplate::current();
 
         return view('admin.dashboard', compact(
             'adminRole',
             'isSuperAdmin',
+            'adminBidangScope',
+            'activeBidangId',
+            'adminBidangOptions',
             'activeAdminTab',
             'users',
             'magangUsers',
@@ -223,6 +323,7 @@ class AdminController extends Controller
             'absensiRecords',
             'projects',
             'bidangs',
+            'manageableBidangs',
             'pembimbingMagangs',
             'sertifikatUsers',
             'month',
@@ -245,8 +346,158 @@ class AdminController extends Controller
             'sakitCount',
             'izinCount',
             'belumAbsenCount',
-            'activityLogs'
+            'activityLogs',
+            'pendingTasks',
+            'availableTeams',
+            'jadwalLandingView',
+            'certificateTemplate'
         ));
+    }
+
+    /**
+     * Get all available teams (default A, B, plus saved custom teams, plus any assigned user teams).
+     */
+    public static function getAvailableTeams(): array
+    {
+        $defaultTeams = ['A', 'B'];
+
+        $saved = DB::table('md_pengaturan')->where('kunci', 'daftar_tim')->value('nilai');
+        $customTeams = [];
+        if ($saved) {
+            $decoded = json_decode($saved, true);
+            if (is_array($decoded)) {
+                $customTeams = $decoded;
+            }
+        }
+
+        $userTeams = User::where('role', 'user')
+            ->whereNotNull('grup')
+            ->where('grup', '!=', '')
+            ->distinct()
+            ->pluck('grup')
+            ->toArray();
+
+        $allTeams = array_unique(array_merge($defaultTeams, $customTeams, $userTeams));
+        natsort($allTeams);
+
+        return array_values($allTeams);
+    }
+
+    public static function getLandingScheduleView(?int $bidangId = null): string
+    {
+        $mode = null;
+
+        if ($bidangId) {
+            $mode = DB::table('md_pengaturan')
+                ->where('kunci', self::landingScheduleSettingKey($bidangId))
+                ->value('nilai');
+        }
+
+        $mode = $mode ?: DB::table('md_pengaturan')->where('kunci', 'jadwal_landing_view')->value('nilai');
+
+        return in_array($mode, ['team', 'individual'], true) ? $mode : 'individual';
+    }
+
+    private static function landingScheduleSettingKey(int $bidangId): string
+    {
+        return 'jadwal_landing_view_bidang_'.$bidangId;
+    }
+
+    private function resolveAdminBidangScope(Request $request, User $admin, bool $isSuperAdmin): ?Bidang
+    {
+        if ($isSuperAdmin) {
+            $bidangId = (int) $request->input('bidang_id', 0);
+
+            return $bidangId > 0 ? Bidang::find($bidangId) : null;
+        }
+
+        return $admin->bidang_id ? Bidang::find($admin->bidang_id) : null;
+    }
+
+    private function applyUserBidangScope(Builder $query, ?Bidang $bidang): Builder
+    {
+        if ($bidang) {
+            $query->where('bidang_id', $bidang->id);
+        }
+
+        return $query;
+    }
+
+    private function applyProjectBidangScope(Builder $query, ?Bidang $bidang): Builder
+    {
+        if ($bidang) {
+            $query->where(function (Builder $projectQuery) use ($bidang): void {
+                $projectQuery
+                    ->whereHas('members', function (Builder $memberQuery) use ($bidang): void {
+                        $this->applyUserBidangScope($memberQuery, $bidang);
+                    })
+                    ->orWhereHas('user', function (Builder $ownerQuery) use ($bidang): void {
+                        $this->applyUserBidangScope($ownerQuery, $bidang);
+                    });
+            });
+        }
+
+        return $query;
+    }
+
+    private function currentAdminBidangScope(): ?Bidang
+    {
+        $admin = Auth::user();
+
+        if (! $admin || $admin->role === 'superadmin' || ! $admin->bidang_id) {
+            return null;
+        }
+
+        return Bidang::find($admin->bidang_id);
+    }
+
+    private function scheduleUsersQuery(): Builder
+    {
+        $query = User::where('role', 'user');
+        $scope = $this->currentAdminBidangScope();
+
+        if ($scope) {
+            $this->applyUserBidangScope($query, $scope);
+        }
+
+        return $query;
+    }
+
+    private function landingScheduleTargetBidangId(Request $request): ?int
+    {
+        $admin = Auth::user();
+
+        if (! $admin) {
+            return null;
+        }
+
+        if ($admin->role === 'superadmin') {
+            $bidangId = (int) $request->input('bidang_id', 0);
+
+            return $bidangId > 0 ? $bidangId : null;
+        }
+
+        return $admin->bidang_id ? (int) $admin->bidang_id : null;
+    }
+
+    private function ensureCanUseBidang(?int $bidangId): void
+    {
+        $scope = $this->currentAdminBidangScope();
+
+        if ($scope && (int) $bidangId !== (int) $scope->id) {
+            throw ValidationException::withMessages([
+                'bidang_id' => 'Admin bidang hanya dapat mengelola peserta pada '.$scope->nama.'.',
+            ]);
+        }
+    }
+
+    private function ensureCanManageUser(User $user): void
+    {
+        $scope = $this->currentAdminBidangScope();
+
+        if ($scope && (int) $user->bidang_id !== (int) $scope->id) {
+            abort(403, 'Admin bidang hanya dapat mengelola peserta pada '.$scope->nama.'.');
+        }
     }
 
     /**
@@ -268,6 +519,7 @@ class AdminController extends Controller
             'tanggal_mulai_magang' => 'nullable|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
             'status_akun' => 'required|in:aktif,nonaktif',
+            'grup' => 'nullable|string|max:20',
         ], [
             'nama.required' => 'Nama peserta magang wajib diisi.',
             'username.unique' => 'Username sudah dipakai.',
@@ -285,6 +537,8 @@ class AdminController extends Controller
             'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
         ]);
 
+        $this->ensureCanUseBidang((int) $request->input('bidang_id'));
+
         $bidang = Bidang::findOrFail($request->input('bidang_id'));
         $pembimbing = PembimbingMagang::findOrFail($request->input('pembimbing_magang_id'));
 
@@ -301,6 +555,7 @@ class AdminController extends Controller
             'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
             'role' => 'user',
             'status_akun' => $request->input('status_akun', 'aktif'),
+            'grup' => $request->input('grup') ?: 'A',
         ])->jadwalMingguan()->create(JadwalMingguan::defaultSchedule());
 
         return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Peserta magang baru berhasil ditambahkan!');
@@ -312,11 +567,12 @@ class AdminController extends Controller
     public function updateUser(Request $request, $id)
     {
         $user = User::findOrFail($id);
+        $this->ensureCanManageUser($user);
 
         $request->validate([
             'nama' => 'required|string|max:100',
-            'username' => 'nullable|string|max:100|unique:md_user,username,' . $id,
-            'email' => 'required|email|max:100|unique:md_user,email,' . $id,
+            'username' => 'nullable|string|max:100|unique:md_user,username,'.$id,
+            'email' => 'required|email|max:100|unique:md_user,email,'.$id,
             'password' => 'nullable|string|min:6',
             'pembimbing_magang_id' => [
                 'required',
@@ -327,6 +583,7 @@ class AdminController extends Controller
             'tanggal_mulai_magang' => 'nullable|date',
             'tanggal_selesai_magang' => 'nullable|date|after_or_equal:tanggal_mulai_magang',
             'status_akun' => 'required|in:aktif,nonaktif',
+            'grup' => 'nullable|string|max:20',
         ], [
             'nama.required' => 'Nama peserta magang wajib diisi.',
             'username.unique' => 'Username sudah dipakai.',
@@ -340,8 +597,10 @@ class AdminController extends Controller
             'bidang_id.exists' => 'Bidang magang tidak valid.',
             'tanggal_mulai_magang.date' => 'Tanggal mulai magang tidak valid.',
             'tanggal_selesai_magang.date' => 'Tanggal selesai magang tidak valid.',
-            'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama atau setelah tanggal mulai.',
+            'tanggal_selesai_magang.after_or_equal' => 'Tanggal selesai magang harus sama or setelah tanggal mulai.',
         ]);
+
+        $this->ensureCanUseBidang((int) $request->input('bidang_id'));
 
         $bidang = Bidang::findOrFail($request->input('bidang_id'));
         $pembimbing = PembimbingMagang::findOrFail($request->input('pembimbing_magang_id'));
@@ -357,6 +616,7 @@ class AdminController extends Controller
             'tanggal_mulai_magang' => $request->input('tanggal_mulai_magang'),
             'tanggal_selesai_magang' => $request->input('tanggal_selesai_magang'),
             'status_akun' => $request->input('status_akun', 'aktif'),
+            'grup' => $request->input('grup', $user->grup ?? 'A'),
         ];
 
         if ($request->filled('password')) {
@@ -374,6 +634,7 @@ class AdminController extends Controller
     public function destroyUser($id)
     {
         $user = User::findOrFail($id);
+        $this->ensureCanManageUser($user);
         $user->delete(); // automatically cascades absensi deletion due to DB schema constraint
 
         return redirect()->route('admin.dashboard', ['tab' => 'pegawai'])->with('success_swal', 'Peserta magang berhasil dihapus!');
@@ -396,7 +657,7 @@ class AdminController extends Controller
             $uploadsRoot = realpath(public_path('uploads'));
             $filePath = realpath(public_path($path));
 
-            if ($uploadsRoot && $filePath && str_starts_with($filePath, $uploadsRoot . DIRECTORY_SEPARATOR) && File::isFile($filePath)) {
+            if ($uploadsRoot && $filePath && str_starts_with($filePath, $uploadsRoot.DIRECTORY_SEPARATOR) && File::isFile($filePath)) {
                 File::delete($filePath);
             }
         }
@@ -407,11 +668,14 @@ class AdminController extends Controller
             'year' => $request->input('year'),
             'search' => $request->input('search'),
             'status' => $request->input('status'),
+            'bidang_id' => $request->input('bidang_id'),
         ])->with('success_swal', 'Data absensi berhasil dihapus.');
     }
 
     public function uploadSertifikat(Request $request, User $user)
     {
+        $this->ensureCanManageUser($user);
+
         $request->validate([
             'sertifikat_file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
         ], [
@@ -426,7 +690,7 @@ class AdminController extends Controller
 
         $file = $request->file('sertifikat_file');
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'pdf');
-        $filename = 'sertifikat_' . $user->id . '_' . now(config('app.timezone'))->format('Ymd_His') . '_' . Str::random(8) . '.' . $extension;
+        $filename = 'sertifikat_'.$user->id.'_'.now(config('app.timezone'))->format('Ymd_His').'_'.Str::random(8).'.'.$extension;
         $path = $file->storeAs('sertifikat', $filename, 'local');
 
         $user->update([
@@ -437,11 +701,58 @@ class AdminController extends Controller
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'sertifikat'])
-            ->with('success_swal', 'Sertifikat ' . $user->nama . ' berhasil diunggah.');
+            ->with('success_swal', 'Sertifikat '.$user->nama.' berhasil diunggah.');
+    }
+
+    public function uploadSertifikatTemplate(Request $request)
+    {
+        if (Auth::user()?->role !== 'superadmin') {
+            abort(403);
+        }
+
+        $request->validate([
+            'certificate_template' => 'required|file|mimes:html,htm,txt|max:2048',
+        ], [
+            'certificate_template.required' => 'File template sertifikat wajib dipilih.',
+            'certificate_template.mimes' => 'Template sertifikat harus berupa file HTML.',
+            'certificate_template.max' => 'Ukuran template sertifikat maksimal 2 MB.',
+        ]);
+
+        CertificateTemplate::storeUploaded($request->file('certificate_template'));
+
+        return redirect()->route('admin.dashboard', ['tab' => 'sertifikat'])
+            ->with('success_swal', 'Template sertifikat berhasil diupload dan siap dipakai.');
+    }
+
+    public function generateSertifikat(User $user)
+    {
+        $this->ensureCanManageUser($user);
+
+        if (! $user->tanggal_selesai_magang || $user->tanggal_selesai_magang->isFuture()) {
+            abort(404);
+        }
+
+        $uploadedTemplate = CertificateTemplate::renderUploaded($user);
+        if ($uploadedTemplate) {
+            return Pdf::loadHTML($uploadedTemplate)
+                ->setPaper([0, 0, 1600, 1131])
+                ->download(CertificatePayload::fileName($user));
+        }
+
+        $pdf = Pdf::loadView('sertifikat.show', [
+            'user' => $user,
+            'certificate' => CertificatePayload::forUser($user),
+            'assets' => CertificatePayload::assets(),
+            'pdfMode' => true,
+        ])->setPaper([0, 0, 1600, 1131]);
+
+        return $pdf->download(CertificatePayload::fileName($user));
     }
 
     public function viewSertifikat(User $user)
     {
+        $this->ensureCanManageUser($user);
+
         if (! $user->sertifikat_file_path || ! Storage::disk('local')->exists($user->sertifikat_file_path)) {
             abort(404);
         }
@@ -452,12 +763,14 @@ class AdminController extends Controller
 
         return response()->file($filePath, [
             'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"',
+            'Content-Disposition' => 'inline; filename="'.addslashes($fileName).'"',
         ]);
     }
 
     public function destroySertifikat(User $user)
     {
+        $this->ensureCanManageUser($user);
+
         if ($user->sertifikat_file_path) {
             Storage::disk('local')->delete($user->sertifikat_file_path);
         }
@@ -483,7 +796,7 @@ class AdminController extends Controller
         $schedules = $request->input('schedules', []);
 
         foreach ($schedules as $userId => $schedule) {
-            $user = User::find($userId);
+            $user = $this->scheduleUsersQuery()->find($userId);
             if (! $user) {
                 continue;
             }
@@ -501,32 +814,268 @@ class AdminController extends Controller
             );
         }
 
-        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal mingguan berhasil disimpan!');
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('success_swal', 'Jadwal mingguan berhasil disimpan!');
     }
 
     /**
-     * Randomly assign WFO/WFH patterns to all employees.
+     * Randomly assign WFO/WFH patterns to all employees in normal view.
+     * Alternating pairs: (Senin & Rabu) and (Selasa & Kamis), with Jumat fixed to WFH.
      */
     public function randomizeSchedules()
     {
-        $users = User::orderBy('nama', 'asc')->get();
+        $users = $this->scheduleUsersQuery()->get();
 
         if ($users->isEmpty()) {
-            return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('error_swal', 'Belum ada peserta magang untuk diacak jadwalnya.');
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('error_swal', 'Belum ada peserta magang untuk dijadwalkan.');
         }
 
-        $shuffled = $users->shuffle();
-        $half = (int) ceil($shuffled->count() / 2);
+        $patterns = [
+            // Pola 1: Senin & Rabu WFO, Selasa & Kamis WFH, Jumat WFH
+            ['senin' => 'wfo', 'selasa' => 'wfh', 'rabu' => 'wfo', 'kamis' => 'wfh', 'jumat' => 'wfh'],
+            // Pola 2: Senin & Rabu WFH, Selasa & Kamis WFO, Jumat WFH
+            ['senin' => 'wfh', 'selasa' => 'wfo', 'rabu' => 'wfh', 'kamis' => 'wfo', 'jumat' => 'wfh'],
+        ];
 
-        $shuffled->each(function (User $user, int $index) use ($half) {
-            $pattern = $index < $half ? JadwalMingguan::grupA() : JadwalMingguan::grupB();
+        $users->shuffle()->values()->each(function (User $user, int $i) use ($patterns) {
+            $user->jadwalMingguan()->updateOrCreate(
+                ['user_id' => $user->id],
+                $patterns[$i % 2]
+            );
+        });
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('success_swal', 'Jadwal mingguan normal berhasil diacak! Pola selang-seling pasangan (Senin-Rabu dan Selasa-Kamis) diterapkan, Jumat tetap WFH.');
+    }
+
+    /**
+     * Store a new custom team.
+     */
+    public function storeTeam(Request $request)
+    {
+        $request->validate([
+            'nama_tim' => 'required|string|max:20',
+        ], [
+            'nama_tim.required' => 'Nama / kode tim harus diisi.',
+            'nama_tim.max' => 'Nama tim maksimal 20 karakter.',
+        ]);
+
+        $rawName = trim((string) $request->input('nama_tim'));
+        if (strlen($rawName) === 1) {
+            $teamName = strtoupper($rawName);
+        } elseif (preg_match('/^tim\s+(.+)$/i', $rawName, $matches)) {
+            $teamName = trim($matches[1]);
+            if (strlen($teamName) === 1) {
+                $teamName = strtoupper($teamName);
+            }
+        } else {
+            $teamName = $rawName;
+        }
+
+        $currentTeams = self::getAvailableTeams();
+        if (! in_array($teamName, $currentTeams, true)) {
+            $currentTeams[] = $teamName;
+            natsort($currentTeams);
+            $currentTeams = array_values(array_unique($currentTeams));
+
+            DB::table('md_pengaturan')->updateOrInsert(
+                ['kunci' => 'daftar_tim'],
+                ['nilai' => json_encode($currentTeams), 'updated_at' => now(), 'created_at' => now()]
+            );
+        }
+
+        $displayLabel = (strlen($teamName) <= 2) ? 'Tim '.$teamName : $teamName;
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'team'])
+            ->with('success_swal', 'Tim baru "'.$displayLabel.'" berhasil ditambahkan!');
+    }
+
+    /**
+     * Apply team-based scheduling manually.
+     */
+    public function updateTeamSchedules(Request $request)
+    {
+        $request->validate([
+            'first_day_mode' => 'required|in:A_WFO,A_WFH',
+        ]);
+
+        $mode = $request->input('first_day_mode');
+        $users = $this->scheduleUsersQuery()->get();
+
+        if ($users->isEmpty()) {
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'team'])->with('error_swal', 'Belum ada peserta magang untuk dijadwalkan.');
+        }
+
+        $teams = self::getAvailableTeams();
+        $pattern1 = JadwalMingguan::grupA();
+        $pattern2 = JadwalMingguan::grupB();
+
+        // Build pattern mapping per team
+        $teamPatterns = [];
+        foreach ($teams as $idx => $t) {
+            $isEven = ($idx % 2 === 0);
+            if ($mode === 'A_WFO') {
+                $teamPatterns[$t] = $isEven ? $pattern1 : $pattern2;
+            } else {
+                $teamPatterns[$t] = $isEven ? $pattern2 : $pattern1;
+            }
+        }
+
+        foreach ($users as $user) {
+            $group = $user->grup ?: ($teams[0] ?? 'A');
+            $pattern = $teamPatterns[$group] ?? ($mode === 'A_WFO' ? $pattern1 : $pattern2);
+
             $user->jadwalMingguan()->updateOrCreate(
                 ['user_id' => $user->id],
                 $pattern
             );
-        });
+        }
 
-        return redirect()->route('admin.dashboard', ['tab' => 'jadwal'])->with('success_swal', 'Jadwal berhasil diacak! Jumat tetap WFH untuk semua peserta magang.');
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('success_swal', 'Jadwal berbasis tim berhasil diterapkan secara serentak!');
+    }
+
+    /**
+     * Randomly assign WFH/WFO schedules based on team collectively (serentak per tim).
+     */
+    public function randomizeTeamSchedules()
+    {
+        $users = $this->scheduleUsersQuery()->get();
+
+        if ($users->isEmpty()) {
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('error_swal', 'Belum ada peserta magang untuk dijadwalkan.');
+        }
+
+        $teams = self::getAvailableTeams();
+        // Randomly pick which team group starts with WFO on Monday (coin flip)
+        $startWithWfo = (bool) random_int(0, 1);
+
+        $pattern1 = JadwalMingguan::grupA();
+        $pattern2 = JadwalMingguan::grupB();
+
+        $teamPatterns = [];
+        foreach ($teams as $idx => $t) {
+            $isEven = ($idx % 2 === 0);
+            if ($startWithWfo) {
+                $teamPatterns[$t] = $isEven ? $pattern1 : $pattern2;
+            } else {
+                $teamPatterns[$t] = $isEven ? $pattern2 : $pattern1;
+            }
+        }
+
+        foreach ($users as $user) {
+            $group = $user->grup ?: ($teams[0] ?? 'A');
+            $pattern = $teamPatterns[$group] ?? ($startWithWfo ? $pattern1 : $pattern2);
+
+            $user->jadwalMingguan()->updateOrCreate(
+                ['user_id' => $user->id],
+                $pattern
+            );
+        }
+
+        $detail = $startWithWfo
+            ? 'Tim Ganjil (A, C, ...): Senin-Rabu WFO | Tim Genap (B, D, ...): Senin-Rabu WFH'
+            : 'Tim Ganjil (A, C, ...): Senin-Rabu WFH | Tim Genap (B, D, ...): Senin-Rabu WFO';
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'normal'])->with('success_swal', 'Jadwal tim berhasil diacak serentak! ('.$detail.', Jumat semua WFH).');
+    }
+
+    /**
+     * Randomly divide intern participants evenly across all available teams.
+     */
+    public function randomizeTeamMembers()
+    {
+        $users = $this->scheduleUsersQuery()->get();
+
+        if ($users->isEmpty()) {
+            return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'team'])->with('error_swal', 'Belum ada peserta magang untuk dibagi ke dalam tim.');
+        }
+
+        $teams = self::getAvailableTeams();
+        if (empty($teams)) {
+            $teams = ['A', 'B'];
+        }
+
+        $shuffled = $users->shuffle()->values();
+        $teamCount = count($teams);
+
+        foreach ($shuffled as $index => $user) {
+            $group = $teams[$index % $teamCount];
+            $user->update(['grup' => $group]);
+        }
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'team'])->with('success_swal', 'Anggota tim berhasil diacak secara merata ke seluruh tim yang tersedia!');
+    }
+
+    /**
+     * Update team assignment for intern participants (names remain fixed from master table).
+     */
+    public function updateTeamMembers(Request $request)
+    {
+        $request->validate([
+            'members' => 'required|array',
+            'members.*.grup' => 'required|string|max:20',
+        ], [
+            'members.*.grup.required' => 'Pilihan tim harus dipilih.',
+        ]);
+
+        foreach ($request->input('members') as $userId => $data) {
+            $user = $this->scheduleUsersQuery()->find($userId);
+            if ($user && isset($data['grup'])) {
+                $user->update([
+                    'grup' => $data['grup'],
+                ]);
+            }
+        }
+
+        if ($request->ajax() || $request->wantsJson()) {
+            $users = $this->scheduleUsersQuery()->get();
+            $availableTeams = self::getAvailableTeams();
+            $teamCounts = [];
+            foreach ($availableTeams as $t) {
+                $teamCounts[$t] = $users->where('grup', $t)->count();
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Penugasan tim peserta magang berhasil disimpan!',
+                'teamCounts' => $teamCounts,
+            ]);
+        }
+
+        return redirect()->route('admin.dashboard', ['tab' => 'jadwal', 'view' => 'team'])->with('success_swal', 'Pembagian tim peserta magang berhasil disimpan!');
+    }
+
+    /**
+     * Update landing page (home) schedule display mode setting.
+     */
+    public function updateLandingScheduleView(Request $request)
+    {
+        $request->validate([
+            'jadwal_landing_view' => 'required|in:team,individual',
+        ]);
+
+        $mode = $request->input('jadwal_landing_view');
+        $bidangId = $this->landingScheduleTargetBidangId($request);
+        $settingKey = $bidangId ? self::landingScheduleSettingKey($bidangId) : 'jadwal_landing_view';
+
+        DB::table('md_pengaturan')->updateOrInsert(
+            ['kunci' => $settingKey],
+            ['nilai' => $mode, 'updated_at' => now(), 'created_at' => now()]
+        );
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'mode' => $mode,
+                'bidang_id' => $bidangId,
+                'message' => 'Pengaturan tampilan jadwal di halaman utama berhasil disimpan!',
+            ]);
+        }
+
+        return redirect()->route('admin.dashboard', array_filter([
+            'tab' => 'jadwal',
+            'view' => 'normal',
+            'bidang_id' => $bidangId,
+        ], fn ($value) => $value !== null && $value !== ''))
+            ->with('success_swal', 'Pengaturan tampilan jadwal di halaman utama berhasil diperbarui!');
     }
 
     /**
@@ -536,8 +1085,9 @@ class AdminController extends Controller
     {
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
+        $bidangId = $request->input('bidang_id') ? (int) $request->input('bidang_id') : null;
 
-        return Excel::download(new AbsensiExport($month, $year), "Rekap_Absensi_{$month}_{$year}.xlsx");
+        return Excel::download(new AbsensiExport($month, $year, $bidangId), "Rekap_Absensi_{$month}_{$year}.xlsx");
     }
 
     /**
@@ -547,6 +1097,7 @@ class AdminController extends Controller
     {
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
+        $bidangScope = $request->input('bidang_id') ? Bidang::find((int) $request->input('bidang_id')) : null;
 
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
         $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth();
@@ -558,7 +1109,7 @@ class AdminController extends Controller
         $maxCalcDate = $endDate->gt($today) ? $today : $endDate;
 
         while ($tempDate->lte($maxCalcDate)) {
-            if (!$tempDate->isWeekend()) {
+            if (! $tempDate->isWeekend()) {
                 $totalWorkdays++;
             }
             $tempDate->addDay();
@@ -568,11 +1119,13 @@ class AdminController extends Controller
             $totalWorkdays = 1;
         }
 
-        $employeesWithAbsensi = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
+        $employeesQuery = User::with(['absensi' => function ($query) use ($startDate, $endDate) {
             $query->whereBetween('tanggal', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                  ->with('statusMaster')
-                  ->orderBy('tanggal', 'asc');
-        }])->orderBy('nama', 'asc')->get();
+                ->with('statusMaster')
+                ->orderBy('tanggal', 'asc');
+        }])->where('role', 'user')->orderBy('nama', 'asc');
+        $this->applyUserBidangScope($employeesQuery, $bidangScope);
+        $employeesWithAbsensi = $employeesQuery->get();
 
         $rekapData = [];
         foreach ($employeesWithAbsensi as $emp) {
@@ -584,7 +1137,7 @@ class AdminController extends Controller
             $attended = $hadir + $wfh;
             $persentase = round(($attended / $totalWorkdays) * 100, 1);
 
-            $rekapData[] = (object)[
+            $rekapData[] = (object) [
                 'user' => $emp,
                 'hadir' => $hadir,
                 'wfh' => $wfh,
@@ -597,6 +1150,7 @@ class AdminController extends Controller
         $namaBulan = Carbon::createFromDate($year, $month, 1)->translatedFormat('F');
 
         $pdf = Pdf::loadView('admin.rekap_pdf', compact('rekapData', 'month', 'year', 'namaBulan', 'totalWorkdays'));
+
         return $pdf->download("Rekap_Absensi_{$namaBulan}_{$year}.pdf");
     }
 
@@ -621,7 +1175,7 @@ class AdminController extends Controller
         $bidang = Bidang::findOrFail($id);
 
         $request->validate([
-            'nama' => 'required|string|max:100|unique:md_bidang,nama,' . $id,
+            'nama' => 'required|string|max:100|unique:md_bidang,nama,'.$id,
         ], [
             'nama.required' => 'Nama bidang wajib diisi.',
             'nama.unique' => 'Nama bidang sudah ada.',
@@ -681,7 +1235,7 @@ class AdminController extends Controller
         $pembimbing = PembimbingMagang::findOrFail($id);
 
         $request->validate([
-            'nama' => 'required|string|max:100|unique:md_pembimbing_magang,nama,' . $id,
+            'nama' => 'required|string|max:100|unique:md_pembimbing_magang,nama,'.$id,
             'bidang_id' => 'required|exists:md_bidang,id',
         ], [
             'nama.required' => 'Nama pembimbing wajib diisi.',
@@ -735,7 +1289,7 @@ class AdminController extends Controller
         while (User::where('username', $username)
             ->when($ignoreUserId, fn ($query) => $query->where('id', '<>', $ignoreUserId))
             ->exists()) {
-            $username = $base . $counter;
+            $username = $base.$counter;
             $counter++;
         }
 

@@ -99,6 +99,7 @@ class Project extends Model
             foreach ($modules as $module) {
                 $sum += ((float) $module->progress) * ((float) $module->bobot) / 100;
             }
+
             return round($sum, 1);
         }
 

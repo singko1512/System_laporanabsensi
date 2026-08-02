@@ -124,13 +124,13 @@ class JadwalMingguan extends Model
 
     private function dayStatusCode(string $day, ?string $fallback): ?string
     {
-        return MasterData::kodeForId($this->attributes[$day . '_status_id'] ?? null) ?? $fallback;
+        return MasterData::kodeForId($this->attributes[$day.'_status_id'] ?? null) ?? $fallback;
     }
 
     private function setDayStatusId(string $day, ?string $value): void
     {
         if ($value) {
-            $this->attributes[$day . '_status_id'] = MasterData::idFor(MasterData::JADWAL_STATUS, $value);
+            $this->attributes[$day.'_status_id'] = MasterData::idFor(MasterData::JADWAL_STATUS, $value);
         }
     }
 }

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Rekap Saya - Absensi Harian')
+@section('title', 'Rekap Saya - SIMALAM')
 
 @section('styles')
 <style>

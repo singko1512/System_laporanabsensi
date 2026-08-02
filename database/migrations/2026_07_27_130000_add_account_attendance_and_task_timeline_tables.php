@@ -224,12 +224,12 @@ return new class extends Migration
             ->get()
             ->each(function ($user): void {
                 $baseUsername = $user->username ?: strtolower(preg_replace('/[^a-z0-9]+/i', '.', $user->nama));
-                $baseUsername = trim($baseUsername, '.') ?: 'peserta' . $user->id;
+                $baseUsername = trim($baseUsername, '.') ?: 'peserta'.$user->id;
                 $username = $baseUsername;
                 $counter = 1;
 
                 while (DB::table('md_user')->where('username', $username)->where('id', '<>', $user->id)->exists()) {
-                    $username = $baseUsername . $counter;
+                    $username = $baseUsername.$counter;
                     $counter++;
                 }
 

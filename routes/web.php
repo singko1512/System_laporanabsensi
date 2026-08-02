@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProjectTimelineController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', [AttendanceController::class, 'home'])->name('home');
 Route::get('/sertifikat/{slug}', [AttendanceController::class, 'sertifikat'])->name('sertifikat.show');
@@ -14,6 +14,9 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login.form');
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
 Route::post('/register', [AuthController::class, 'register'])->name('register.store');
+Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+Route::post('/forgot-password/verify', [AuthController::class, 'verifyForgotPasswordIdentity'])->name('password.verify');
+Route::post('/forgot-password', [AuthController::class, 'resetUserPassword'])->name('password.update');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Legacy login names tetap diarahkan ke auth baru.
@@ -31,6 +34,7 @@ Route::middleware(['role:user'])->group(function () {
     Route::post('/absensi/task/ambil/{task}', [ProjectTimelineController::class, 'selfAssignTask'])->name('absensi.task.ambil');
     Route::post('/absensi/task/selesai/{task}', [ProjectTimelineController::class, 'submitWorkTask'])->name('absensi.task.submit_work');
     Route::post('/absensi/module/ambil/{module}', [ProjectTimelineController::class, 'selfAssignModule'])->name('absensi.module.ambil');
+    Route::post('/absensi/task/batal/{task}', [ProjectTimelineController::class, 'cancelTask'])->name('absensi.task.batal');
 
     // Legacy redirects
     Route::get('/absensi/form', [AttendanceController::class, 'showForm'])->name('absensi.form');
@@ -49,25 +53,11 @@ Route::middleware(['admin'])->group(function () {
     // CRUD Kelola Magang (md_user)
     Route::post('/admin/pegawai/tambah', [AdminController::class, 'storeUser'])->name('admin.user.store');
     Route::post('/admin/pegawai/update/{id}', [AdminController::class, 'updateUser'])->name('admin.user.update');
-    Route::get('/admin/pegawai/hapus/{id}', [AdminController::class, 'destroyUser'])->name('admin.user.destroy');
+    Route::post('/admin/pegawai/hapus/{id}', [AdminController::class, 'destroyUser'])->name('admin.user.destroy');
+    Route::get('/admin/sertifikat/generate/{user}', [AdminController::class, 'generateSertifikat'])->name('admin.sertifikat.generate');
     Route::post('/admin/sertifikat/upload/{user}', [AdminController::class, 'uploadSertifikat'])->name('admin.sertifikat.upload');
     Route::get('/admin/sertifikat/file/{user}', [AdminController::class, 'viewSertifikat'])->name('admin.sertifikat.view');
     Route::post('/admin/sertifikat/hapus/{user}', [AdminController::class, 'destroySertifikat'])->name('admin.sertifikat.destroy');
-});
-
-Route::middleware(['admin:superadmin'])->group(function () {
-    Route::post('/admin/absensi/hapus/{absensi}', [AdminController::class, 'destroyAbsensi'])->name('admin.absensi.destroy');
-
-    // CRUD Kelola Bidang (md_bidang)
-    Route::post('/admin/bidang/tambah', [AdminController::class, 'storeBidang'])->name('admin.bidang.store');
-    Route::post('/admin/bidang/update/{id}', [AdminController::class, 'updateBidang'])->name('admin.bidang.update');
-    Route::get('/admin/bidang/hapus/{id}', [AdminController::class, 'destroyBidang'])->name('admin.bidang.destroy');
-    Route::post('/admin/pembimbing/tambah', [AdminController::class, 'storePembimbing'])->name('admin.pembimbing.store');
-    Route::post('/admin/pembimbing/update/{id}', [AdminController::class, 'updatePembimbing'])->name('admin.pembimbing.update');
-    Route::get('/admin/pembimbing/hapus/{id}', [AdminController::class, 'destroyPembimbing'])->name('admin.pembimbing.destroy');
-
-    Route::post('/admin/jadwal/simpan', [AdminController::class, 'updateSchedules'])->name('admin.jadwal.update');
-    Route::post('/admin/jadwal/acak', [AdminController::class, 'randomizeSchedules'])->name('admin.jadwal.random');
 
     Route::post('/admin/project/tambah', [ProjectTimelineController::class, 'storeProject'])->name('admin.project.store');
     Route::post('/admin/project/update/{project}', [ProjectTimelineController::class, 'updateProject'])->name('admin.project.update');
@@ -92,8 +82,38 @@ Route::middleware(['admin:superadmin'])->group(function () {
     Route::post('/admin/project/note/tambah', [ProjectTimelineController::class, 'storeNote'])->name('admin.project.note.store');
     Route::post('/admin/project/assignment/simpan', [ProjectTimelineController::class, 'assignDay'])->name('admin.project.assignment.store');
     Route::post('/admin/project/assignment/hapus/{assignment}', [ProjectTimelineController::class, 'removeDayAssignment'])->name('admin.project.assignment.destroy');
-    
+
+    Route::post('/admin/jadwal/simpan', [AdminController::class, 'updateSchedules'])->name('admin.jadwal.update');
+    Route::post('/admin/jadwal/acak', [AdminController::class, 'randomizeSchedules'])->name('admin.jadwal.random');
+    Route::post('/admin/jadwal/tim', [AdminController::class, 'updateTeamSchedules'])->name('admin.jadwal.team');
+    Route::post('/admin/jadwal/tim/tambah', [AdminController::class, 'storeTeam'])->name('admin.jadwal.team.store');
+    Route::post('/admin/jadwal/tim/acak', [AdminController::class, 'randomizeTeamSchedules'])->name('admin.jadwal.team.random');
+    Route::post('/admin/jadwal/tim/acak-anggota', [AdminController::class, 'randomizeTeamMembers'])->name('admin.jadwal.team.random_members');
+    Route::post('/admin/jadwal/tim/anggota', [AdminController::class, 'updateTeamMembers'])->name('admin.jadwal.team.members');
+    Route::post('/admin/jadwal/pengaturan-tampilan', [AdminController::class, 'updateLandingScheduleView'])->name('admin.jadwal.landing_view');
+});
+
+Route::middleware(['admin:superadmin'])->group(function () {
+    Route::post('/admin/absensi/hapus/{absensi}', [AdminController::class, 'destroyAbsensi'])->name('admin.absensi.destroy');
+
+    // CRUD Kelola Bidang (md_bidang)
+    Route::post('/admin/bidang/tambah', [AdminController::class, 'storeBidang'])->name('admin.bidang.store');
+    Route::post('/admin/bidang/update/{id}', [AdminController::class, 'updateBidang'])->name('admin.bidang.update');
+    Route::post('/admin/bidang/hapus/{id}', [AdminController::class, 'destroyBidang'])->name('admin.bidang.destroy');
+    Route::post('/admin/pembimbing/tambah', [AdminController::class, 'storePembimbing'])->name('admin.pembimbing.store');
+    Route::post('/admin/pembimbing/update/{id}', [AdminController::class, 'updatePembimbing'])->name('admin.pembimbing.update');
+    Route::post('/admin/pembimbing/hapus/{id}', [AdminController::class, 'destroyPembimbing'])->name('admin.pembimbing.destroy');
+
+    Route::post('/admin/sertifikat/template', [AdminController::class, 'uploadSertifikatTemplate'])->name('admin.sertifikat.template.upload');
+
     // Export Data Rekap Bulanan
     Route::get('/admin/rekap/excel', [AdminController::class, 'exportExcel'])->name('admin.rekap.excel');
     Route::get('/admin/rekap/pdf', [AdminController::class, 'exportPdf'])->name('admin.rekap.pdf');
 });
+
+// Endpoint untuk refresh CSRF token berkala secara asynchronous
+Route::get('/refresh-csrf', function () {
+    return response()->json([
+        'csrf_token' => csrf_token(),
+    ]);
+})->name('refresh.csrf');

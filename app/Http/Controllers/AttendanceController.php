@@ -2,30 +2,63 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Absensi;
+use App\Models\ActivityLog;
+use App\Models\Bidang;
 use App\Models\MasterData;
 use App\Models\Project;
-use App\Models\ProjectTask;
-use App\Models\ActivityLog;
-use App\Models\ProjectTaskParticipant;
 use App\Models\ProjectModule;
+use App\Models\ProjectTask;
+use App\Models\ProjectTaskParticipant;
+use App\Models\User;
+use App\Support\CertificatePayload;
+use App\Support\CertificateTemplate;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
-use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
+    private const OFFICIAL_BIDANG_NAMES = [
+        'Bidang Pengelolaan Informasi dan Komunikasi Publik',
+        'Bidang Aplikasi Informatika',
+        'Bidang Infrastruktur Teknologi',
+        'Bidang Persandian dan Statistik',
+        'Kepala UPT Radio dan Televisi',
+    ];
+
     /**
      * Display the landing page.
      */
     public function home()
     {
-        $users = User::with('jadwalMingguan')->orderBy('nama', 'asc')->get();
+        $users = User::with(['jadwalMingguan', 'bidang'])->where('role', 'user')->orderBy('nama', 'asc')->get();
+        $bidangsByName = Bidang::whereIn('nama', self::OFFICIAL_BIDANG_NAMES)->get()->keyBy('nama');
+        $scheduleBidangGroups = collect(self::OFFICIAL_BIDANG_NAMES)->map(function (string $bidangName) use ($users, $bidangsByName) {
+            $bidang = $bidangsByName->get($bidangName);
+            $members = $users
+                ->filter(function (User $user) use ($bidang, $bidangName): bool {
+                    return ($bidang && (int) ($user->bidang_id ?? 0) === (int) $bidang->id)
+                        || $user->bidang_magang === $bidangName;
+                })
+                ->sortBy('nama')
+                ->values();
+
+            return [
+                'id' => $bidang?->id,
+                'nama' => $bidangName,
+                'users' => $members,
+                'landing_view' => AdminController::getLandingScheduleView($bidang?->id),
+            ];
+        });
+
+        $landingModes = $scheduleBidangGroups->pluck('landing_view')->unique()->values();
+        $jadwalLandingView = $landingModes->count() === 1 ? $landingModes->first() : 'mixed';
+        $availableTeams = AdminController::getAvailableTeams();
 
         $weekStart = Carbon::now()->startOfWeek(Carbon::MONDAY);
         $weekEnd = $weekStart->copy()->addDays(4);
@@ -45,7 +78,7 @@ class AttendanceController extends Controller
             'jumat' => $weekStart->copy()->addDays(4),
         ];
 
-        return view('home', compact('users', 'weekStart', 'weekEnd', 'todayKey', 'dayMap'));
+        return view('home', compact('users', 'scheduleBidangGroups', 'weekStart', 'weekEnd', 'todayKey', 'dayMap', 'jadwalLandingView', 'availableTeams'));
     }
 
     /**
@@ -57,14 +90,14 @@ class AttendanceController extends Controller
         $users = User::where('role', 'user')->orderBy('nama', 'asc')->get();
         $absensiStatuses = MasterData::options(MasterData::ABSENSI_STATUS);
 
-        $bidangList = \App\Models\Bidang::orderBy('nama', 'asc')->pluck('nama');
+        $bidangList = Bidang::orderBy('nama', 'asc')->pluck('nama');
 
         // Determine active tab
         $activeTab = $request->input('tab', 'form');
         if (! in_array($activeTab, ['form', 'timeline'], true)) {
             return redirect()
                 ->route('absensi.index', ['tab' => 'form'])
-                ->with('error_swal', 'Peserta magang hanya dapat mengakses absensi dan timeline project.');
+                ->with('error_swal', 'Peserta magang hanya dapat mengakses absensi dan timeline proyek.');
         }
 
         // Rekap data
@@ -78,7 +111,7 @@ class AttendanceController extends Controller
         $filterType = $request->input('filter_type', 'all');
         $userId = $currentUser->id;
         $bidangMagang = $request->input('bidang_magang');
-        if ($userId && !$bidangMagang) {
+        if ($userId && ! $bidangMagang) {
             $tempUser = User::find($userId);
             if ($tempUser) {
                 $bidangMagang = $tempUser->bidang_magang;
@@ -168,147 +201,103 @@ class AttendanceController extends Controller
 
         $hasActiveTask = $myActiveTasks->isNotEmpty() || $myRevisionTasks->isNotEmpty() || $myReviewTasks->isNotEmpty();
 
+        $activeStatusId = MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif');
+        $allActiveProjects = Project::with([
+            'statusMaster',
+            'members',
+            'modules.tasks',
+            'tasks.module',
+            'tasks.user',
+        ])
+            ->where('status_id', $activeStatusId)
+            ->orderBy('tanggal_mulai', 'desc')
+            ->get();
+
+        $timelineProjects = $allActiveProjects;
+
+        // Determine active selected project
+        $selectedProject = null;
+        if ($hasActiveTask) {
+            $firstActive = $myTodayTasks->first() ?: $myReviewTasks->first();
+            $selectedProject = $firstActive ? $firstActive->project : null;
+            if ($selectedProject) {
+                session(['active_project_id' => $selectedProject->id]);
+            }
+            if ($request->has('project_id') || $request->has('reset_project')) {
+                session()->flash('warning_swal', 'Anda masih memiliki tugas yang sedang dikerjakan. Silakan klik "Batal Pilih" pada tugas di atas jika ingin mengganti proyek.');
+            }
+        } elseif ($request->has('reset_project')) {
+            session()->forget('active_project_id');
+            $selectedProject = null;
+        } elseif ($request->filled('project_id')) {
+            $selectedProjectId = (int) $request->input('project_id');
+            $selectedProject = $allActiveProjects->firstWhere('id', $selectedProjectId) ?? Project::with([
+                'statusMaster',
+                'members',
+                'modules.tasks.user',
+                'tasks.module',
+                'tasks.user',
+            ])->find($selectedProjectId);
+            if ($selectedProject) {
+                session(['active_project_id' => $selectedProject->id]);
+            }
+        } elseif (session('active_project_id')) {
+            $selectedProjectId = (int) session('active_project_id');
+            $selectedProject = $allActiveProjects->firstWhere('id', $selectedProjectId);
+            if (! $selectedProject) {
+                session()->forget('active_project_id');
+            }
+        }
+
         if ($hasActiveTask) {
             $activeTaskIds = $myActiveTasks->pluck('id')
                 ->merge($myRevisionTasks->pluck('id'))
                 ->merge($myReviewTasks->pluck('id'))
                 ->unique();
-            $availableTasks = ProjectTask::with(['project', 'module'])
+            $availableTasks = ProjectTask::with(['project', 'module', 'user'])
                 ->whereIn('id', $activeTaskIds)
                 ->get();
+            $allAvailableTasks = collect();
+            $availableModules = collect();
+            $allAvailableModules = collect();
         } else {
-            $hasProjects = \Illuminate\Support\Facades\DB::table('md_project_user')->where('user_id', $userId)->exists();
-            if ($hasProjects) {
-                $availableTasks = ProjectTask::with(['project', 'module'])
+            if ($selectedProject) {
+                // Semua task yang belum diambil pada proyek terpilih
+                $allAvailableTasks = ProjectTask::with(['project', 'module', 'user'])
+                    ->where('project_id', $selectedProject->id)
                     ->whereNull('user_id')
                     ->where('status', 'belum_dikerjakan')
-                    ->where(function ($q) {
-                        $q->whereNull('module_id')
-                            ->orWhereHas('module', function ($mq) {
-                                $mq->whereHas('tasks', function ($tq) {
-                                    $tq->whereNotNull('user_id');
-                                });
-                            });
-                    })
-                    ->whereHas('project', function ($query) use ($userId) {
-                        $query->where('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'))
-                            ->where(function ($sub) use ($userId) {
-                                $sub->whereHas('members', function ($m) use ($userId) {
-                                    $m->where('md_user.id', $userId);
-                                })->orWhereDoesntHave('members');
-                            });
-                    })
                     ->orderBy('tanggal_selesai')
                     ->orderBy('judul')
                     ->get();
+                $availableTasks = $allAvailableTasks;
+
+                // Modul yang belum di-breakdown (belum memiliki task sama sekali)
+                $availableModules = ProjectModule::with(['project', 'tasks'])
+                    ->where('project_id', $selectedProject->id)
+                    ->whereDoesntHave('tasks')
+                    ->orderBy('nama')
+                    ->get();
+                $allAvailableModules = $availableModules;
             } else {
-                $availableTasks = ProjectTask::with(['project', 'module'])
-                    ->whereNull('user_id')
-                    ->where('status', 'belum_dikerjakan')
-                    ->where(function ($q) {
-                        $q->whereNull('module_id')
-                            ->orWhereHas('module', function ($mq) {
-                                $mq->whereHas('tasks', function ($tq) {
-                                    $tq->whereNotNull('user_id');
-                                });
-                            });
-                    })
-                    ->whereHas('project', function ($query) {
-                        $query->where('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'));
-                    })
-                    ->orderBy('tanggal_selesai')
-                    ->orderBy('judul')
-                    ->get();
+                $availableTasks = collect();
+                $allAvailableTasks = collect();
+                $availableModules = collect();
+                $allAvailableModules = collect();
             }
         }
 
         $timelineUser = $currentUser;
         $taskParticipants = ProjectTaskParticipant::with([
-                'task.project',
-                'task.module',
-                'task.participants.user',
-                'submissions.replies.user',
-                'submissions.reviewer',
-            ])
+            'task.project',
+            'task.module',
+            'task.participants.user',
+            'submissions.replies.user',
+            'submissions.reviewer',
+        ])
             ->where('user_id', $userId)
             ->latest('joined_at')
             ->get();
-
-        $timelineProjects = Project::with([
-                'statusMaster',
-                'members',
-                'tasks.module',
-                'tasks.user',
-            ])
-            ->where(function ($query) use ($userId) {
-                $query->whereHas('members', function ($memberQuery) use ($userId) {
-                    $memberQuery->where('md_user.id', $userId);
-                })->orWhereHas('tasks', function ($taskQuery) use ($userId) {
-                    $taskQuery->where('user_id', $userId);
-                })->orWhere('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'));
-            })
-            ->orderByRaw('status_id = ? asc', [MasterData::idFor(MasterData::PROJECT_STATUS, 'selesai')])
-            ->orderBy('tanggal_mulai', 'desc')
-            ->get();
-
-        $hasProjects = \Illuminate\Support\Facades\DB::table('md_project_user')->where('user_id', $userId)->exists();
-        if ($hasProjects) {
-            $allAvailableTasks = ProjectTask::with(['project', 'module'])
-                ->whereNull('user_id')
-                ->where('status', 'belum_dikerjakan')
-                ->where(function ($q) {
-                    $q->whereNull('module_id')
-                        ->orWhereHas('module', function ($mq) {
-                            $mq->whereHas('tasks', function ($tq) {
-                                $tq->whereNotNull('user_id');
-                            });
-                        });
-                })
-                ->whereHas('project', function ($query) use ($userId) {
-                    $query->where('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'))
-                        ->where(function ($sub) use ($userId) {
-                            $sub->whereHas('members', function ($m) use ($userId) {
-                                $m->where('md_user.id', $userId);
-                            })->orWhereDoesntHave('members');
-                        });
-                })
-                ->orderBy('tanggal_selesai')
-                ->get();
-        } else {
-            $allAvailableTasks = ProjectTask::with(['project', 'module'])
-                ->whereNull('user_id')
-                ->where('status', 'belum_dikerjakan')
-                ->where(function ($q) {
-                    $q->whereNull('module_id')
-                        ->orWhereHas('module', function ($mq) {
-                            $mq->whereHas('tasks', function ($tq) {
-                                $tq->whereNotNull('user_id');
-                            });
-                        });
-                })
-                ->whereHas('project', function ($query) {
-                    $query->where('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'));
-                })
-                ->orderBy('tanggal_selesai')
-                ->get();
-        }
-
-        $projectIds = $timelineProjects->pluck('id');
-        $allAvailableModules = ProjectModule::with('project')
-            ->whereIn('project_id', $projectIds)
-            ->whereHas('project', function ($q) {
-                $q->where('status_id', MasterData::idFor(MasterData::PROJECT_STATUS, 'aktif'));
-            })
-            ->whereDoesntHave('tasks', function ($q) {
-                $q->whereNotNull('user_id');
-            })
-            ->orderBy('nama')
-            ->get();
-
-        $availableModules = collect();
-        if (!$hasActiveTask) {
-            $availableModules = $allAvailableModules;
-        }
 
         return view('absensi.index', compact(
             'users',
@@ -334,7 +323,9 @@ class AttendanceController extends Controller
             'allAvailableTasks',
             'hasActiveTask',
             'availableModules',
-            'allAvailableModules'
+            'allAvailableModules',
+            'allActiveProjects',
+            'selectedProject'
         ));
     }
 
@@ -356,7 +347,7 @@ class AttendanceController extends Controller
                 ->with('error_swal', 'Absensi masuk dan pulang hari ini sudah lengkap.');
         }
 
-        $hasProjects = \Illuminate\Support\Facades\DB::table('md_project_user')->where('user_id', $userId)->exists();
+        $hasProjects = DB::table('md_project_user')->where('user_id', $userId)->exists();
         $isCheckout = $absensi && ! $absensi->jam_pulang;
         $status = (string) $request->input('status');
 
@@ -368,11 +359,11 @@ class AttendanceController extends Controller
             ],
             'task_id' => [
                 Rule::requiredIf(function () use ($isCheckout, $status, $userId) {
-                    if ($isCheckout || !in_array($status, ['hadir', 'wfh'], true)) {
+                    if ($isCheckout || ! in_array($status, ['hadir', 'wfh'], true)) {
                         return false;
                     }
-                    
-                    $hasProjects = \Illuminate\Support\Facades\DB::table('md_project_user')->where('user_id', $userId)->exists();
+
+                    $hasProjects = DB::table('md_project_user')->where('user_id', $userId)->exists();
                     if ($hasProjects) {
                         return ProjectTask::whereNull('user_id')
                             ->where('status', 'belum_dikerjakan')
@@ -398,21 +389,24 @@ class AttendanceController extends Controller
                 function ($attribute, $value, $fail) {
                     if (is_string($value) && str_starts_with($value, 'module_')) {
                         $id = (int) str_replace('module_', '', $value);
-                        if (!\App\Models\ProjectModule::where('id', $id)->exists()) {
+                        $module = ProjectModule::find($id);
+                        if (! $module) {
                             $fail('Modul yang dipilih tidak valid.');
+                        } elseif ($module->is_chosen) {
+                            $fail('Modul ini sudah dipilih oleh peserta lain.');
                         }
                     } elseif (is_string($value) && str_starts_with($value, 'task_')) {
                         $id = (int) str_replace('task_', '', $value);
-                        if (!\App\Models\ProjectTask::where('id', $id)->exists()) {
+                        if (! ProjectTask::where('id', $id)->exists()) {
                             $fail('Tugas yang dipilih tidak valid.');
                         }
                     } else {
                         $id = (int) $value;
-                        if (!\App\Models\ProjectTask::where('id', $id)->exists()) {
+                        if (! ProjectTask::where('id', $id)->exists()) {
                             $fail('Tugas yang dipilih tidak valid.');
                         }
                     }
-                }
+                },
             ],
             'foto' => [
                 Rule::requiredIf($isCheckout && in_array($status, ['hadir', 'wfh'], true)),
@@ -438,8 +432,8 @@ class AttendanceController extends Controller
             ],
         ], [
             'status.required' => 'Pilih status absensi.',
-            'task_id.required' => 'Pilih modul/task yang akan dikerjakan hari ini.',
-            'task_id.required_if' => 'Pilih modul/task yang akan dikerjakan hari ini.',
+            'task_id.required' => 'Pilih tugas atau modul yang akan dikerjakan hari ini.',
+            'task_id.required_if' => 'Pilih tugas atau modul yang akan dikerjakan hari ini.',
             'foto.required' => 'Lampiran wajib diunggah untuk status Hadir/WFH saat absen pulang.',
             'foto.image' => 'Berkas harus berupa gambar (JPG, PNG, JPEG, WEBP).',
             'foto.mimes' => 'Berkas harus berupa gambar JPG, JPEG, PNG, atau WEBP.',
@@ -451,7 +445,7 @@ class AttendanceController extends Controller
             'lokasi_latitude.required' => 'Lokasi GPS wajib dikunci untuk semua status absensi.',
             'lokasi_longitude.required' => 'Lokasi GPS wajib dikunci untuk semua status absensi.',
             'keterangan.required' => $isCheckout && in_array($status, ['hadir', 'wfh'], true)
-                ? 'Deskripsi pekerjaan/project wajib diisi saat absen pulang Hadir/WFH.'
+                ? 'Laporan pekerjaan hari ini wajib diisi saat absen pulang Hadir/WFH.'
                 : 'Alasan izin wajib diisi.',
         ]);
 
@@ -467,31 +461,46 @@ class AttendanceController extends Controller
 
         $statusId = MasterData::idFor(MasterData::ABSENSI_STATUS, $status);
         $now = now(config('app.timezone'));
-        
+
         $taskIdInput = $request->input('task_id');
         $taskId = null;
         if ($taskIdInput) {
             if (str_starts_with($taskIdInput, 'module_')) {
                 $moduleId = (int) str_replace('module_', '', $taskIdInput);
                 $module = ProjectModule::findOrFail($moduleId);
-                
-                if (!$module->project->members()->where('md_user.id', $userId)->exists()) {
+
+                if ($module->is_chosen) {
+                    return redirect()->back()
+                        ->withInput()
+                        ->with('error_swal', 'Modul ini sudah dipilih oleh peserta lain.');
+                }
+
+                $hasActiveTask = ProjectTask::where('user_id', $userId)
+                    ->whereIn('status', ['sedang_dikerjakan', 'review', 'revision'])
+                    ->exists();
+                if ($hasActiveTask) {
+                    return redirect()->back()
+                        ->withInput()
+                        ->with('error_swal', 'Anda hanya dapat mengambil satu tugas dalam satu waktu. Selesaikan tugas aktif Anda terlebih dahulu.');
+                }
+
+                if (! $module->project->members()->where('md_user.id', $userId)->exists()) {
                     $module->project->members()->attach($userId);
                 }
-                
+
                 $task = ProjectTask::create([
                     'project_id' => $module->project_id,
                     'module_id' => $module->id,
                     'user_id' => $userId,
-                    'judul' => 'Pengerjaan Modul: ' . $module->nama,
-                    'deskripsi' => 'Pengerjaan seluruh modul ' . $module->nama,
+                    'judul' => 'Pengerjaan Modul: '.$module->nama,
+                    'deskripsi' => 'Pengerjaan seluruh modul '.$module->nama,
                     'tanggal_mulai' => $module->tanggal_mulai,
                     'tanggal_selesai' => $module->tanggal_selesai,
                     'status' => 'sedang_dikerjakan',
                     'join_window_minutes' => 999999,
                     'urutan' => ProjectTask::where('project_id', $module->project_id)->max('urutan') + 1,
                 ]);
-                
+
                 ProjectTaskParticipant::create([
                     'task_id' => $task->id,
                     'user_id' => $userId,
@@ -499,15 +508,15 @@ class AttendanceController extends Controller
                     'joined_at' => now(),
                     'contribution_percentage' => 100.00,
                 ]);
-                
+
                 $task->recalculateModuleProgress();
-                
+
                 ActivityLog::create([
                     'user_id' => $userId,
                     'project_id' => $module->project_id,
-                    'aktivitas' => User::find($userId)->nama . ' mengambil modul via presensi masuk: ' . $module->nama,
+                    'aktivitas' => User::find($userId)->nama.' mengambil modul saat absen masuk: '.$module->nama,
                 ]);
-                
+
                 $taskId = $task->id;
             } elseif (str_starts_with($taskIdInput, 'task_')) {
                 $taskId = (int) str_replace('task_', '', $taskIdInput);
@@ -558,9 +567,9 @@ class AttendanceController extends Controller
         $absensi->update([
             'jam_pulang' => $now->format('H:i:s'),
             'status_pulang_id' => $statusId,
-            'foto_pulang' => $fotoKameraPath,
-            'foto_kamera' => $absensi->foto_kamera ?: $fotoKameraPath,
-            'foto' => $absensi->foto ?: $fotoPath,
+            'foto_pulang' => $fotoPath ?: $fotoKameraPath,
+            'foto_kamera' => $fotoKameraPath ?: $absensi->foto_kamera,
+            'foto' => $fotoPath ?: $absensi->foto,
             ...$locationPayload,
             'lokasi_pulang_latitude' => $request->input('lokasi_latitude'),
             'lokasi_pulang_longitude' => $request->input('lokasi_longitude'),
@@ -569,7 +578,7 @@ class AttendanceController extends Controller
             'laporan' => $request->input('keterangan') ?: $absensi->laporan,
         ]);
 
-        return redirect()->route('absensi.index', ['tab' => 'timeline'])->with('success_swal', 'Absensi pulang berhasil disimpan. Silakan lengkapi laporan pekerjaan di timeline.');
+        return redirect()->route('absensi.index')->with('success_swal', 'Absensi pulang berhasil disimpan. Terima kasih atas kerja keras Anda hari ini!');
     }
 
     /**
@@ -605,25 +614,35 @@ class AttendanceController extends Controller
             abort(404);
         }
 
-        return view('sertifikat.show', compact('user'));
+        $uploadedTemplate = CertificateTemplate::renderUploaded($user);
+        if ($uploadedTemplate) {
+            return response($uploadedTemplate);
+        }
+
+        return view('sertifikat.show', [
+            'user' => $user,
+            'certificate' => CertificatePayload::forUser($user),
+            'assets' => CertificatePayload::assets(),
+            'pdfMode' => false,
+        ]);
     }
 
     private function storeAbsensiFile($file, int $userId, string $folder): string
     {
-        $relativeDir = 'uploads/absensi/' . $folder;
+        $relativeDir = 'uploads/absensi/'.$folder;
         $uploadDir = public_path($relativeDir);
 
         File::ensureDirectoryExists($uploadDir, 0755, true);
 
         $extension = strtolower($file->extension() ?: $file->getClientOriginalExtension() ?: 'jpg');
         $filename = now(config('app.timezone'))->format('Ymd_His')
-            . '_' . $userId
-            . '_' . Str::random(10)
-            . '.' . $extension;
+            .'_'.$userId
+            .'_'.Str::random(10)
+            .'.'.$extension;
 
         $file->move($uploadDir, $filename);
 
-        return $relativeDir . '/' . $filename;
+        return $relativeDir.'/'.$filename;
     }
 
     private function serveAbsensiFile(?string $path)
@@ -657,7 +676,7 @@ class AttendanceController extends Controller
                 ->whereIn('status', ['sedang_dikerjakan', 'review', 'revision'])
                 ->exists();
             if ($hasActiveTask) {
-                throw new \Exception("Anda hanya dapat mengambil satu tugas dalam satu waktu. Selesaikan tugas aktif Anda terlebih dahulu.");
+                throw new \Exception('Anda hanya dapat mengambil satu tugas dalam satu waktu. Selesaikan tugas aktif Anda terlebih dahulu.');
             }
 
             $task->update([
@@ -668,7 +687,7 @@ class AttendanceController extends Controller
             ActivityLog::create([
                 'user_id' => $userId,
                 'project_id' => $task->project_id,
-                'aktivitas' => User::find($userId)->nama . ' mengambil task via presensi masuk: ' . $task->judul,
+                'aktivitas' => User::find($userId)->nama.' mengambil tugas saat absen masuk: '.$task->judul,
             ]);
         }
 

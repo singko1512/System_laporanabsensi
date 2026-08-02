@@ -4,9 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Absensi;
 use App\Models\Bidang;
-use App\Models\JadwalMingguan;
 use App\Models\MasterData;
-use App\Models\PembimbingMagang;
 use App\Models\Pengaturan;
 use App\Models\Project;
 use App\Models\ProjectDayAssignment;
@@ -54,108 +52,9 @@ class DatabaseSeeder extends Seeder
             ['kunci' => 'superadmin_login_password'],
             ['nilai' => Hash::make('superadmin123')]
         );
+        $this->seedOfficialBidangs();
         $this->seedAdminAccounts();
-
-        $today = Carbon::today(config('app.timezone'));
-        $mulaiMagang = $today->copy()->startOfMonth()->subMonth();
-        $selesaiMagang = $mulaiMagang->copy()->addMonths(3)->endOfMonth();
-
-        $dummyUsers = [
-            ['nama' => 'Andi Pratama', 'nip_atau_id' => 'INT-2026-001', 'email' => 'andi.pratama@example.test', 'pembimbing_magang' => 'Rina Kartika', 'bidang_magang' => 'Backend Developer'],
-            ['nama' => 'Bunga Maharani', 'nip_atau_id' => 'INT-2026-002', 'email' => 'bunga.maharani@example.test', 'pembimbing_magang' => 'Budi Santoso', 'bidang_magang' => 'Frontend Developer'],
-            ['nama' => 'Candra Wijaya', 'nip_atau_id' => 'INT-2026-003', 'email' => 'candra.wijaya@example.test', 'pembimbing_magang' => 'Dimas Prakoso', 'bidang_magang' => 'Quality Assurance'],
-            ['nama' => 'Dewi Lestari', 'nip_atau_id' => 'INT-2026-004', 'email' => 'dewi.lestari@example.test', 'pembimbing_magang' => 'Sari Amalia', 'bidang_magang' => 'UI/UX Designer'],
-            ['nama' => 'Eko Saputra', 'nip_atau_id' => 'INT-2026-005', 'email' => 'eko.saputra@example.test', 'pembimbing_magang' => 'Rizky Maulana', 'bidang_magang' => 'Data Analyst'],
-            ['nama' => 'Fitri Anjani', 'nip_atau_id' => 'INT-2026-006', 'email' => 'fitri.anjani@example.test', 'pembimbing_magang' => 'Rizky Maulana', 'bidang_magang' => 'Backend Developer'],
-            ['nama' => 'Gilang Ramadhan', 'nip_atau_id' => 'INT-2026-007', 'email' => 'gilang.ramadhan@example.test', 'pembimbing_magang' => 'Sari Amalia', 'bidang_magang' => 'UI/UX Designer'],
-            ['nama' => 'Hana Putri', 'nip_atau_id' => 'INT-2026-008', 'email' => 'hana.putri@example.test', 'pembimbing_magang' => 'Rizky Maulana', 'bidang_magang' => 'Data Analyst'],
-        ];
-
-        $bidangMasters = collect($dummyUsers)->pluck('bidang_magang')->unique()->values();
-        $pembimbingMasters = collect($dummyUsers)
-            ->mapWithKeys(fn (array $user) => [$user['pembimbing_magang'] => $user['bidang_magang']]);
-
-        if (Schema::hasTable('md_bidang')) {
-            $bidangMasters->each(fn (string $nama) => Bidang::updateOrCreate(['nama' => $nama]));
-        }
-
-        if (Schema::hasTable('md_pembimbing_magang')) {
-            $pembimbingMasters->each(function (string $bidangNama, string $nama): void {
-                $payload = [];
-
-                if (Schema::hasColumn('md_pembimbing_magang', 'bidang_id') && Schema::hasTable('md_bidang')) {
-                    $payload['bidang_id'] = Bidang::where('nama', $bidangNama)->value('id');
-                }
-
-                PembimbingMagang::updateOrCreate(['nama' => $nama], $payload);
-            });
-        }
-
-        $schedulePatterns = [
-            JadwalMingguan::defaultSchedule(),
-            JadwalMingguan::grupA(),
-            JadwalMingguan::grupB(),
-        ];
-
-        $users = collect($dummyUsers)->map(function (array $data, int $index) use ($mulaiMagang, $selesaiMagang, $schedulePatterns): User {
-            $userPayload = [
-                'nama' => $data['nama'],
-                'email' => $data['email'],
-                'tanggal_mulai_magang' => $mulaiMagang->copy()->addDays($index % 4)->toDateString(),
-                'tanggal_selesai_magang' => $selesaiMagang->copy()->addDays($index % 6)->toDateString(),
-            ];
-
-            if (Schema::hasColumn('md_user', 'nip_atau_id')) {
-                $userPayload['nip_atau_id'] = $data['nip_atau_id'];
-            }
-
-            if (Schema::hasColumn('md_user', 'pembimbing_magang')) {
-                $userPayload['pembimbing_magang'] = $data['pembimbing_magang'];
-            }
-
-            if (Schema::hasColumn('md_user', 'pembimbing_magang_id') && Schema::hasTable('md_pembimbing_magang')) {
-                $userPayload['pembimbing_magang_id'] = PembimbingMagang::where('nama', $data['pembimbing_magang'])->value('id');
-            }
-
-            if (Schema::hasColumn('md_user', 'bidang_magang')) {
-                $userPayload['bidang_magang'] = $data['bidang_magang'];
-            }
-
-            if (Schema::hasColumn('md_user', 'bidang_id') && Schema::hasTable('md_bidang')) {
-                $userPayload['bidang_id'] = Bidang::where('nama', $data['bidang_magang'])->value('id');
-            }
-
-            if (Schema::hasColumn('md_user', 'role')) {
-                $userPayload['role'] = 'user';
-            }
-
-            if (Schema::hasColumn('md_user', 'username')) {
-                $userPayload['username'] = Str::slug($data['nama'], '.');
-            }
-
-            if (Schema::hasColumn('md_user', 'password')) {
-                $userPayload['password'] = 'password123';
-            }
-
-            if (Schema::hasColumn('md_user', 'status_akun')) {
-                $userPayload['status_akun'] = 'aktif';
-            }
-
-            $user = User::updateOrCreate(
-                ['email' => $data['email']],
-                $userPayload
-            );
-
-            JadwalMingguan::updateOrCreate(
-                ['user_id' => $user->id],
-                $schedulePatterns[$index % count($schedulePatterns)]
-            );
-
-            return $user;
-        })->values();
-
-        $this->seedDummyAbsensi($users, $today);
-        $this->seedDummyProjects($users, $today);
+        $this->seedBidangAdminAccounts();
     }
 
     private function seedDummyAbsensi($users, Carbon $today): void
@@ -430,15 +329,28 @@ class DatabaseSeeder extends Seeder
             return;
         }
 
+        $aplikasiBidangId = Schema::hasTable('md_bidang')
+            ? Bidang::where('nama', 'Bidang Aplikasi Informatika')->value('id')
+            : null;
+        $adminPayload = [
+            'nama' => 'Admin',
+            'email' => 'admin@example.test',
+            'password' => 'admin123',
+            'role' => 'admin',
+            'status_akun' => 'aktif',
+        ];
+
+        if (Schema::hasColumn('md_user', 'bidang_id')) {
+            $adminPayload['bidang_id'] = $aplikasiBidangId;
+        }
+
+        if (Schema::hasColumn('md_user', 'bidang_magang')) {
+            $adminPayload['bidang_magang'] = $aplikasiBidangId ? 'Bidang Aplikasi Informatika' : null;
+        }
+
         User::updateOrCreate(
             ['username' => 'admin'],
-            [
-                'nama' => 'Admin',
-                'email' => 'admin@example.test',
-                'password' => 'admin123',
-                'role' => 'admin',
-                'status_akun' => 'aktif',
-            ]
+            $adminPayload
         );
 
         User::updateOrCreate(
@@ -451,5 +363,155 @@ class DatabaseSeeder extends Seeder
                 'status_akun' => 'aktif',
             ]
         );
+    }
+
+    private function seedBidangAdminAccounts(): void
+    {
+        if (! Schema::hasTable('md_user') || ! Schema::hasTable('md_bidang')) {
+            return;
+        }
+
+        foreach ([
+            [
+                'nama' => 'Admin Bidang Pengelolaan Informasi dan Komunikasi Publik',
+                'username' => 'admin.pikp',
+                'email' => 'admin.pikp@example.test',
+                'password' => 'K7mQ2vLp',
+                'bidang' => 'Bidang Pengelolaan Informasi dan Komunikasi Publik',
+            ],
+            [
+                'nama' => 'Admin Bidang Aplikasi Informatika',
+                'username' => 'admin.aplikasi',
+                'email' => 'admin.aplikasi@example.test',
+                'password' => 'R9xT4nBa',
+                'bidang' => 'Bidang Aplikasi Informatika',
+            ],
+            [
+                'nama' => 'Admin Bidang Infrastruktur Teknologi',
+                'username' => 'admin.infrastruktur',
+                'email' => 'admin.infrastruktur@example.test',
+                'password' => 'P6hZ8cWu',
+                'bidang' => 'Bidang Infrastruktur Teknologi',
+            ],
+            [
+                'nama' => 'Admin Bidang Persandian dan Statistik',
+                'username' => 'admin.persandian',
+                'email' => 'admin.persandian@example.test',
+                'password' => 'V3sL7qNd',
+                'bidang' => 'Bidang Persandian dan Statistik',
+            ],
+            [
+                'nama' => 'Admin Kepala UPT Radio dan Televisi',
+                'username' => 'admin.upt-rtv',
+                'email' => 'admin.upt-rtv@example.test',
+                'password' => 'M8rY5pXe',
+                'bidang' => 'Kepala UPT Radio dan Televisi',
+            ],
+        ] as $account) {
+            $bidangId = Bidang::where('nama', $account['bidang'])->value('id');
+            if (! $bidangId) {
+                continue;
+            }
+
+            User::updateOrCreate(
+                ['username' => $account['username']],
+                [
+                    'nama' => $account['nama'],
+                    'email' => $account['email'],
+                    'password' => $account['password'],
+                    'role' => 'admin',
+                    'status_akun' => 'aktif',
+                    'bidang_id' => $bidangId,
+                    'bidang_magang' => $account['bidang'],
+                ]
+            );
+        }
+    }
+
+    private function seedOfficialBidangParticipants(Carbon $mulaiMagang, Carbon $selesaiMagang): void
+    {
+        if (! Schema::hasTable('md_user') || ! Schema::hasTable('md_bidang')) {
+            return;
+        }
+
+        $bidangConfigs = [
+            'pikp' => 'Bidang Pengelolaan Informasi dan Komunikasi Publik',
+            'aplikasi' => 'Bidang Aplikasi Informatika',
+            'infrastruktur' => 'Bidang Infrastruktur Teknologi',
+            'persandian' => 'Bidang Persandian dan Statistik',
+            'upt-rtv' => 'Kepala UPT Radio dan Televisi',
+        ];
+
+        $firstNames = [
+            'Aditya', 'Alya', 'Bagas', 'Citra', 'Dimas',
+            'Elisa', 'Farhan', 'Gita', 'Hafiz', 'Intan',
+            'Jihan', 'Kirana', 'Lukman', 'Maya', 'Naufal',
+            'Olivia', 'Putra', 'Raisa', 'Satria', 'Tiara',
+        ];
+
+        $lastNames = [
+            'Pratama', 'Maharani', 'Wijaya', 'Lestari', 'Saputra',
+            'Anjani', 'Ramadhan', 'Putri', 'Maulana', 'Kartika',
+            'Santoso', 'Pertiwi', 'Nugroho', 'Amalia', 'Firmansyah',
+            'Permata', 'Hidayat', 'Utami', 'Kusuma', 'Azzahra',
+        ];
+
+        foreach ($bidangConfigs as $code => $bidangName) {
+            $bidang = Bidang::updateOrCreate(['nama' => $bidangName]);
+            $currentCount = User::where('role', 'user')->where('bidang_id', $bidang->id)->count();
+            $bidangIndex = array_search($bidangName, array_values($bidangConfigs), true) ?: 0;
+
+            for ($i = 1; $i <= 20; $i++) {
+                $username = sprintf('peserta.%s.%02d', $code, $i);
+                $email = $username.'@example.test';
+                $existingUser = User::where('email', $email)->first();
+
+                if (! $existingUser && $currentCount >= 20) {
+                    continue;
+                }
+
+                $firstName = $firstNames[($i - 1 + ($bidangIndex * 3)) % count($firstNames)];
+                $lastName = $lastNames[($i - 1 + ($bidangIndex * 5)) % count($lastNames)];
+                $payload = [
+                    'nama' => $firstName.' '.$lastName,
+                    'username' => null,
+                    'email' => $email,
+                    'password' => 'password123',
+                    'role' => 'user',
+                    'status_akun' => 'aktif',
+                    'bidang_id' => $bidang->id,
+                    'bidang_magang' => $bidangName,
+                    'tanggal_mulai_magang' => $mulaiMagang->toDateString(),
+                    'tanggal_selesai_magang' => $selesaiMagang->toDateString(),
+                ];
+
+                if (Schema::hasColumn('md_user', 'nip_atau_id')) {
+                    $payload['nip_atau_id'] = sprintf('INT-%s-%03d', Str::upper(Str::replace('-', '', $code)), $i);
+                }
+
+                User::updateOrCreate(['email' => $email], $payload);
+
+                if (! $existingUser) {
+                    $currentCount++;
+                }
+            }
+        }
+    }
+
+    private function seedOfficialBidangs(): void
+    {
+        if (! Schema::hasTable('md_bidang')) {
+            return;
+        }
+
+        foreach ([
+            'Bidang Pengelolaan Informasi dan Komunikasi Publik',
+            'Bidang Aplikasi Informatika',
+            'Bidang Infrastruktur Teknologi',
+            'Bidang Persandian dan Statistik',
+            'Kepala UPT Radio dan Televisi',
+        ] as $nama) {
+            Bidang::updateOrCreate(['nama' => $nama]);
+        }
     }
 }

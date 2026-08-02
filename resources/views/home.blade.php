@@ -1,37 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Absensi Harian - Employee Attendance System')
+@section('title', 'SIMALAM - Sistem Informasi Monitoring Absensi dan Laporan Magang')
 
 @section('styles')
 <style>
     .hero-section {
         padding: 5rem 0 3rem;
         text-align: center;
-    }
-
-    .status-dot {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 1.5rem;
-    }
-
-    .status-dot::before {
-        content: '';
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--green);
-        box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.2);
-        animation: pulse-dot 2s infinite;
-    }
-
-    @keyframes pulse-dot {
-        0%, 100% { box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.2); }
-        50% { box-shadow: 0 0 0 6px rgba(0, 184, 148, 0.08); }
     }
 
     .hero-heading {
@@ -74,7 +49,7 @@
     }
 
     .feature-card {
-        border-radius: 24px;
+        border-radius: 12px;
         padding: 2rem 2rem 1.75rem;
         position: relative;
         overflow: hidden;
@@ -192,26 +167,27 @@
     .card-admin .card-cta { color: var(--primary); }
 
     /* ── Schedule Section ── */
+    /* ── Schedule Section ── */
     .schedule-section {
-        max-width: 920px;
-        margin: 3rem auto 2rem;
+        max-width: 1180px;
+        margin: 3rem auto 2.5rem;
     }
 
     .schedule-card {
         background: var(--white);
         border: 1px solid var(--border);
-        border-radius: 24px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+        border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
         overflow: hidden;
     }
 
     .schedule-header {
-        padding: 1.5rem 1.75rem 1rem;
+        padding: 1.5rem 1.75rem 1.25rem;
         border-bottom: 1px solid var(--border);
     }
 
     .schedule-header h3 {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 800;
         color: var(--dark);
         margin-bottom: 0.25rem;
@@ -224,13 +200,115 @@
         margin: 0;
     }
 
+    .schedule-bidang-tabs {
+        display: flex;
+        gap: 0.25rem;
+        padding: 1rem 1.5rem;
+        background: #fff;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #d8dcef transparent;
+    }
+
+    .schedule-bidang-tabs-inner {
+        display: inline-flex;
+        gap: 0.25rem;
+        padding: 4px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #f8fafc;
+        min-width: max-content;
+    }
+
+    .schedule-bidang-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border: 0;
+        border-radius: 11px;
+        background: transparent;
+        color: var(--text-muted);
+        padding: 0.58rem 0.85rem;
+        font-size: 0.75rem;
+        font-weight: 800;
+        line-height: 1.25;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .schedule-bidang-tab:hover {
+        color: var(--primary);
+        background: #fff;
+    }
+
+    .schedule-bidang-tab.active {
+        background: var(--primary);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(108, 92, 231, 0.28);
+    }
+
+    .schedule-bidang-tab-count {
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--primary);
+        padding: 0.15rem 0.45rem;
+        font-size: 0.68rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .schedule-bidang-tab:not(.active) .schedule-bidang-tab-count {
+        background: #fff;
+        color: var(--text-muted);
+    }
+
+    .schedule-bidang-panel.d-none {
+        display: none !important;
+    }
+
+    .schedule-bidang-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .schedule-bidang-title h4 {
+        margin: 0;
+        color: var(--dark);
+        font-size: 0.92rem;
+        font-weight: 800;
+        line-height: 1.35;
+    }
+
+    .schedule-bidang-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.32rem 0.65rem;
+        white-space: nowrap;
+    }
+
     .schedule-table {
         width: 100%;
+        min-width: 760px;
         border-collapse: collapse;
     }
 
     .schedule-table thead th {
-        background: #f1f5f9;
+        background: #f8fafc;
         color: var(--text-muted);
         font-size: 0.72rem;
         font-weight: 700;
@@ -247,7 +325,7 @@
     }
 
     .schedule-table thead th.is-today {
-        background: rgba(108, 92, 231, 0.1);
+        background: rgba(108, 92, 231, 0.08);
         color: var(--primary);
     }
 
@@ -277,6 +355,20 @@
         background: rgba(108, 92, 231, 0.04);
     }
 
+    .team-header-row {
+        background: #f8fafc !important;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .team-header-row td {
+        padding: 0.65rem 1.5rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
+        text-align: left !important;
+        letter-spacing: 0.3px;
+    }
+
     .day-date {
         display: block;
         font-size: 0.68rem;
@@ -300,8 +392,9 @@
     }
 
     .loc-wfh {
-        background: rgba(108, 92, 231, 0.12);
-        color: var(--primary);
+        background: rgba(245, 158, 11, 0.16);
+        color: #b45309;
+        border: 1px solid rgba(245, 158, 11, 0.26);
     }
 
     .schedule-empty {
@@ -318,11 +411,13 @@
 
     .schedule-legend {
         display: flex;
+        flex-wrap: wrap;
         gap: 1.25rem;
         padding: 0.85rem 1.5rem;
         border-top: 1px solid var(--border);
         font-size: 0.78rem;
         color: var(--text-muted);
+        background: #fafbff;
     }
 </style>
 @endsection
@@ -331,12 +426,11 @@
 <div class="container">
     <!-- Hero -->
     <div class="hero-section">
-        <div class="status-dot">Sistem aktif — Hari ini</div>
         <h1 class="hero-heading">
-            Absensi & <em>Laporan Harian</em> yang ringkas dan modern
+            SIMALAM
         </h1>
         <p class="hero-sub">
-            Catat kehadiran, kirim laporan pekerjaan, dan pantau performa tim dalam satu antarmuka yang bersih.
+            Sistem Informasi Monitoring Absensi dan Laporan Magang untuk mencatat kehadiran, mengirim laporan pekerjaan, dan memantau performa tim.
         </p>
     </div>
 
@@ -348,7 +442,7 @@
                 <i class="fa-regular fa-calendar-check"></i>
             </div>
             <div class="card-label">Untuk Peserta Magang</div>
-            <div class="card-title">Menu Absensi & Laporan</div>
+            <div class="card-title">Absensi & Laporan Magang</div>
             <div class="card-desc">
                 Login akun, isi absensi masuk/pulang, pilih task harian, dan kirim laporan pekerjaan.
             </div>
@@ -386,64 +480,269 @@
         @endif
     </div>
 
-    {{-- Jadwal Mingguan --}}
+    {{-- Jadwal Mingguan (Mendukung Tampilan Tim & Perorangan Terintegrasi) --}}
+    @php
+        $getTeamBadgeColor = function($team) {
+            $t = strtoupper(trim((string)$team));
+            $colors = [
+                'A' => ['bg' => '#eff6ff', 'text' => '#1d4ed8', 'border' => '#bfdbfe', 'icon' => '🔵', 'title_bg' => '#dbeafe', 'title_text' => '#1e40af'],
+                'B' => ['bg' => '#f0fdf4', 'text' => '#15803d', 'border' => '#bbf7d0', 'icon' => '🟢', 'title_bg' => '#dcfce7', 'title_text' => '#166534'],
+                'C' => ['bg' => '#faf5ff', 'text' => '#7e22ce', 'border' => '#e9d5ff', 'icon' => '🟣', 'title_bg' => '#f3e8ff', 'title_text' => '#6b21a8'],
+                'D' => ['bg' => '#fffbeb', 'text' => '#b45309', 'border' => '#fde68a', 'icon' => '🟡', 'title_bg' => '#fef3c7', 'title_text' => '#92400e'],
+                'E' => ['bg' => '#fff1f2', 'text' => '#be123c', 'border' => '#fecdd3', 'icon' => '🔴', 'title_bg' => '#ffe4e6', 'title_text' => '#9f1239'],
+                'F' => ['bg' => '#ecfeff', 'text' => '#0891b2', 'border' => '#a5f3fc', 'icon' => '🔷', 'title_bg' => '#cffafe', 'title_text' => '#155e75'],
+            ];
+            return $colors[$t] ?? ['bg' => '#f8fafc', 'text' => '#475569', 'border' => '#cbd5e1', 'icon' => '⚪', 'title_bg' => '#f1f5f9', 'title_text' => '#334155'];
+        };
+
+        $dayLabels = [
+            'senin' => 'Senin',
+            'selasa' => 'Selasa',
+            'rabu' => 'Rabu',
+            'kamis' => 'Kamis',
+            'jumat' => 'Jumat',
+        ];
+
+        $currentLandingMode = $jadwalLandingView ?? 'individual';
+        $landingModeLabel = match ($currentLandingMode) {
+            'team' => 'Tampilan Tim',
+            'individual' => 'Tampilan Perorangan',
+            default => 'Sesuai Bidang',
+        };
+        $activeScheduleBidangIndex = $scheduleBidangGroups->search(fn ($group) => $group['users']->isNotEmpty());
+        $activeScheduleBidangIndex = $activeScheduleBidangIndex === false ? 0 : $activeScheduleBidangIndex;
+    @endphp
+
     <div class="schedule-section">
         <div class="schedule-card">
+            {{-- Header Jadwal --}}
             <div class="schedule-header">
-                <h3><i class="fa-solid fa-calendar-week me-2 text-primary"></i>Jadwal Minggu Ini</h3>
-                <p>{{ $weekStart->translatedFormat('d F') }} – {{ $weekEnd->translatedFormat('d F Y') }}</p>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <h3 class="mb-1"><i class="fa-solid fa-calendar-week me-2 text-primary"></i>Jadwal Kerja Minggu Ini</h3>
+                        <p class="mb-0">{{ $weekStart->translatedFormat('d F') }} – {{ $weekEnd->translatedFormat('d F Y') }}</p>
+                    </div>
+                    <div>
+                        <span class="badge rounded-pill fw-semibold px-3 py-1.5" style="background:#f8fafc; color:var(--text-muted); border:1px solid var(--border); font-size:0.75rem;">
+                            <i class="fa-solid {{ $currentLandingMode === 'team' ? 'fa-people-group text-primary' : ($currentLandingMode === 'individual' ? 'fa-user text-primary' : 'fa-sliders text-primary') }} me-1"></i>
+                            {{ $landingModeLabel }}
+                        </span>
+                    </div>
+                </div>
             </div>
 
             @if ($users->isEmpty())
                 <div class="schedule-empty">
                     <h6>Belum ada jadwal</h6>
-                    <p>Jadwal WFO/WFH akan tampil setelah admin menambahkan pegawai dan mengatur jadwal.</p>
+                    <p>Jadwal WFO/WFH akan tampil setelah admin menambahkan peserta magang dan mengatur jadwal.</p>
                 </div>
             @else
-                @php
-                    $dayLabels = [
-                        'senin' => 'Senin',
-                        'selasa' => 'Selasa',
-                        'rabu' => 'Rabu',
-                        'kamis' => 'Kamis',
-                        'jumat' => 'Jumat',
-                    ];
-                @endphp
-                <div class="table-responsive">
-                    <table class="schedule-table">
-                        <thead>
-                            <tr>
-                                <th>Karyawan</th>
-                                @foreach ($dayLabels as $key => $label)
-                                    <th class="{{ $todayKey === $key ? 'is-today' : '' }}">
-                                        {{ $label }}
-                                        <span class="day-date">{{ $dayMap[$key]->format('d/m') }}</span>
-                                    </th>
-                                @endforeach
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($users as $user)
-                                @php $jadwal = $user->jadwalMingguan; @endphp
-                                <tr>
-                                    <td>{{ $user->nama }}</td>
-                                    @foreach ($dayLabels as $key => $label)
-                                        @php $loc = $jadwal ? $jadwal->forDay($key) : ($key === 'jumat' ? 'wfh' : 'wfo'); @endphp
-                                        <td class="{{ $todayKey === $key ? 'is-today' : '' }}">
-                                            <span class="loc-badge loc-{{ $loc }}">{{ strtoupper($loc) }}</span>
-                                        </td>
-                                    @endforeach
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                <div class="schedule-bidang-tabs" role="tablist" aria-label="Pilih bidang jadwal magang">
+                    <div class="schedule-bidang-tabs-inner">
+                        @foreach ($scheduleBidangGroups as $bidangGroup)
+                            <button type="button"
+                                class="schedule-bidang-tab {{ $loop->index === $activeScheduleBidangIndex ? 'active' : '' }}"
+                                data-schedule-bidang-target="schedule-bidang-{{ $loop->index }}"
+                                role="tab"
+                                aria-selected="{{ $loop->index === $activeScheduleBidangIndex ? 'true' : 'false' }}">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <span>{{ $bidangGroup['nama'] }}</span>
+                                <span class="schedule-bidang-tab-count">{{ $bidangGroup['users']->count() }}</span>
+                            </button>
+                        @endforeach
+                    </div>
                 </div>
+
+                <div id="homeScheduleBidangViews">
+                    @foreach ($scheduleBidangGroups as $bidangGroup)
+                        @php
+                            $bidangUsers = $bidangGroup['users'];
+                            $bidangLandingMode = $bidangGroup['landing_view'] ?? 'individual';
+                        @endphp
+                        <div class="schedule-bidang-group schedule-bidang-panel {{ $loop->index === $activeScheduleBidangIndex ? '' : 'd-none' }}" id="schedule-bidang-{{ $loop->index }}" role="tabpanel">
+                            <div class="schedule-bidang-title">
+                                <h4><i class="fa-solid fa-layer-group me-2 text-primary"></i>{{ $bidangGroup['nama'] }}</h4>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <span class="schedule-bidang-count">
+                                        <i class="fa-solid fa-users"></i> {{ $bidangUsers->count() }} Peserta
+                                    </span>
+                                    <span class="schedule-bidang-count">
+                                        <i class="fa-solid {{ $bidangLandingMode === 'team' ? 'fa-people-group' : 'fa-user' }}"></i>
+                                        {{ $bidangLandingMode === 'team' ? 'Tampilan Tim' : 'Tampilan Perorangan' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            @if ($bidangUsers->isEmpty())
+                                <div class="schedule-empty py-4">
+                                    <h6>Belum ada peserta magang</h6>
+                                    <p>Peserta bidang ini akan tampil setelah ditambahkan oleh admin.</p>
+                                </div>
+                            @elseif ($bidangLandingMode === 'team')
+                                <div class="table-responsive">
+                                    <table class="schedule-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="min-width:240px;">Peserta & Kelompok Tim</th>
+                                                @foreach ($dayLabels as $key => $label)
+                                                    <th class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                                        {{ $label }}
+                                                        <span class="day-date">{{ $dayMap[$key]->format('d/m') }}</span>
+                                                    </th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @php
+                                                $groupedUsers = $bidangUsers->groupBy(function($u) {
+                                                    return $u->grup ?: 'A';
+                                                });
+                                                $teamsList = $availableTeams ?? ['A', 'B'];
+                                                foreach ($groupedUsers->keys() as $k) {
+                                                    if (!in_array($k, $teamsList, true)) {
+                                                        $teamsList[] = $k;
+                                                    }
+                                                }
+                                                natsort($teamsList);
+                                            @endphp
+
+                                            @foreach ($teamsList as $teamCode)
+                                                @php
+                                                    $teamMembers = $groupedUsers->get($teamCode, collect());
+                                                    if ($teamMembers->isEmpty()) continue;
+                                                    $style = $getTeamBadgeColor($teamCode);
+                                                @endphp
+
+                                                <tr class="team-header-row" style="background:{{ $style['bg'] }}!important; border-color:{{ $style['border'] }}!important;">
+                                                    <td colspan="6" style="color:{{ $style['title_text'] }}!important; border-color:{{ $style['border'] }}!important;">
+                                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                                            <span>
+                                                                <span class="me-1">{{ $style['icon'] }}</span>
+                                                                <strong>KELOMPOK TIM {{ $teamCode }}</strong>
+                                                                <span class="badge rounded-pill ms-2 fw-semibold" style="background:{{ $style['title_bg'] }}; color:{{ $style['title_text'] }}; font-size:0.72rem; border:1px solid {{ $style['border'] }};">
+                                                                    {{ $teamMembers->count() }} Peserta
+                                                                </span>
+                                                            </span>
+                                                            <span style="font-size:0.72rem; font-weight:600; opacity:0.85;">
+                                                                Pola kerja serentak tim
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+
+                                                @foreach ($teamMembers as $user)
+                                                    @php $jadwal = $user->jadwalMingguan; @endphp
+                                                    <tr>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold" 
+                                                                    style="width:28px; height:28px; background:{{ $style['bg'] }}; color:{{ $style['text'] }}; border:1px solid {{ $style['border'] }}; font-size:0.75rem;">
+                                                                    {{ strtoupper(substr($user->nama, 0, 1)) }}
+                                                                </div>
+                                                                <div>
+                                                                    <div class="fw-bold text-dark" style="font-size:0.85rem;">{{ $user->nama }}</div>
+                                                                    <div class="text-muted" style="font-size:0.72rem;">Tim {{ $user->grup ?: 'A' }}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        @foreach ($dayLabels as $key => $label)
+                                                            @php $loc = $jadwal ? $jadwal->forDay($key) : ($key === 'jumat' ? 'wfh' : 'wfo'); @endphp
+                                                            <td class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                                                <span class="loc-badge loc-{{ $loc }}">{{ strtoupper($loc) }}</span>
+                                                            </td>
+                                                        @endforeach
+                                                    </tr>
+                                                @endforeach
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="schedule-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="min-width:240px;">Peserta Magang</th>
+                                                @foreach ($dayLabels as $key => $label)
+                                                    <th class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                                        {{ $label }}
+                                                        <span class="day-date">{{ $dayMap[$key]->format('d/m') }}</span>
+                                                    </th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($bidangUsers as $user)
+                                                @php $jadwal = $user->jadwalMingguan; @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold" 
+                                                                style="width:28px; height:28px; background:rgba(108, 92, 231, 0.1); color:var(--primary); font-size:0.75rem;">
+                                                                {{ strtoupper(substr($user->nama, 0, 1)) }}
+                                                            </div>
+                                                            <div>
+                                                                <div class="fw-bold text-dark" style="font-size:0.85rem;">{{ $user->nama }}</div>
+                                                                <div class="text-muted" style="font-size:0.72rem;">Tim {{ $user->grup ?: 'A' }}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    @foreach ($dayLabels as $key => $label)
+                                                        @php $loc = $jadwal ? $jadwal->forDay($key) : ($key === 'jumat' ? 'wfh' : 'wfo'); @endphp
+                                                        <td class="{{ $todayKey === $key ? 'is-today' : '' }}">
+                                                            <span class="loc-badge loc-{{ $loc }}">{{ strtoupper($loc) }}</span>
+                                                        </td>
+                                                    @endforeach
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- Legend --}}
                 <div class="schedule-legend">
-                    <span><span class="loc-badge loc-wfo">WFO</span> Work From Office (Masuk Kantor)</span>
-                    <span><span class="loc-badge loc-wfh">WFH</span> Work From Home</span>
+                    <span class="d-inline-flex align-items-center gap-1.5">
+                        <span class="loc-badge loc-wfo">WFO</span>
+                        <span><strong>Work From Office</strong> (Masuk Kantor)</span>
+                    </span>
+                    <span class="d-inline-flex align-items-center gap-1.5">
+                        <span class="loc-badge loc-wfh">WFH</span>
+                        <span><strong>Work From Home</strong> (Bekerja dari Rumah)</span>
+                    </span>
+                    <span class="ms-auto text-muted" style="font-size:0.75rem;">
+                        <i class="fa-solid fa-clock-rotate-left me-1"></i> Jadwal diatur dan diperbarui oleh Admin
+                    </span>
                 </div>
             @endif
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const bidangTabs = document.querySelectorAll('.schedule-bidang-tab');
+        const bidangPanels = document.querySelectorAll('.schedule-bidang-panel');
+
+        bidangTabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                const targetId = tab.dataset.scheduleBidangTarget;
+
+                bidangTabs.forEach(function (item) {
+                    item.classList.toggle('active', item === tab);
+                    item.setAttribute('aria-selected', item === tab ? 'true' : 'false');
+                });
+
+                bidangPanels.forEach(function (panel) {
+                    panel.classList.toggle('d-none', panel.id !== targetId);
+                });
+            });
+        });
+    });
+</script>
 @endsection

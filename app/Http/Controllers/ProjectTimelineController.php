@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
 use App\Models\ActivityLog;
+use App\Models\MasterData;
+use App\Models\Project;
 use App\Models\ProjectDayAssignment;
 use App\Models\ProjectModule;
 use App\Models\ProjectNote;
@@ -11,7 +12,7 @@ use App\Models\ProjectNoteReply;
 use App\Models\ProjectTask;
 use App\Models\ProjectTaskParticipant;
 use App\Models\ProjectTimeline;
-use App\Models\MasterData;
+use App\Models\User;
 use App\Models\WorkSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -34,13 +35,14 @@ class ProjectTimelineController extends Controller
             'tanggal_mulai' => 'required|date',
             'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
         ], [
-            'nama.required' => 'Nama project wajib diisi.',
+            'nama.required' => 'Nama proyek wajib diisi.',
             'tanggal_mulai.required' => 'Tanggal mulai wajib diisi.',
             'tanggal_selesai.required' => 'Tanggal selesai wajib diisi.',
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai.',
         ]);
 
         $userIds = collect($data['user_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $this->ensureCanUseUsers($userIds->all());
 
         $project = DB::transaction(function () use ($data, $userIds) {
             $project = Project::create([
@@ -59,7 +61,7 @@ class ProjectTimelineController extends Controller
         });
 
         return redirect()->route('admin.dashboard', ['tab' => 'timeline'])
-            ->with('success_swal', 'Project timeline berhasil dibuat.')
+            ->with('success_swal', 'Timeline proyek berhasil dibuat.')
             ->with('project_created_id', $project->id)
             ->with('project_created_name', $project->nama);
     }
@@ -81,6 +83,8 @@ class ProjectTimelineController extends Controller
         ]);
 
         $userIds = collect($data['user_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $this->ensureCanManageProject($project);
+        $this->ensureCanUseUsers($userIds->all());
 
         $project->update([
             'user_id' => $userIds->first() ?: Auth::id(),
@@ -103,17 +107,19 @@ class ProjectTimelineController extends Controller
             ->delete();
         $this->syncPrimaryTimeline($project->refresh());
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Project timeline berhasil diperbarui.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline proyek berhasil diperbarui.');
     }
 
     public function destroyProject(Project $project)
     {
+        $this->ensureCanManageProject($project);
+
         DB::transaction(function () use ($project): void {
             $this->deleteProjectChildren($project);
             $project->delete();
         });
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Project timeline berhasil dihapus.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline proyek berhasil dihapus.');
     }
 
     public function storeTimeline(Request $request)
@@ -131,8 +137,11 @@ class ProjectTimelineController extends Controller
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai timeline harus sama atau setelah tanggal mulai.',
         ]);
 
+        $project = Project::findOrFail($data['project_id']);
+        $this->ensureCanManageProject($project);
+
         ProjectTimeline::create([
-            'project_id' => $data['project_id'],
+            'project_id' => $project->id,
             'nama' => $data['nama'],
             'tanggal_mulai' => $data['tanggal_mulai'],
             'tanggal_selesai' => $data['tanggal_selesai'],
@@ -140,11 +149,13 @@ class ProjectTimelineController extends Controller
             'urutan' => ProjectTimeline::where('project_id', $data['project_id'])->max('urutan') + 1,
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline project berhasil dibuat.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline proyek berhasil dibuat.');
     }
 
     public function updateTimeline(Request $request, ProjectTimeline $timeline)
     {
+        $this->ensureCanManageProject($timeline->project);
+
         $data = $request->validate([
             'nama' => 'required|string|max:150',
             'tanggal_mulai' => 'required|date',
@@ -154,29 +165,31 @@ class ProjectTimelineController extends Controller
 
         $timeline->update($data);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline project berhasil diperbarui.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline proyek berhasil diperbarui.');
     }
 
     public function destroyTimeline(ProjectTimeline $timeline)
     {
+        $this->ensureCanManageProject($timeline->project);
+
         $timeline->modules()->delete();
         $timeline->delete();
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline project berhasil dihapus.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Timeline proyek berhasil dihapus.');
     }
 
     public function storeModule(Request $request)
     {
         // Compatibility check: get project_id from timeline if missing
-        if (!$request->has('project_id') && $request->has('timeline_id')) {
+        if (! $request->has('project_id') && $request->has('timeline_id')) {
             $tl = ProjectTimeline::find($request->timeline_id);
             if ($tl) {
                 $request->merge(['project_id' => $tl->project_id]);
             }
         }
-        
+
         // Compatibility check: default bobot to 0 if missing
-        if (!$request->has('bobot')) {
+        if (! $request->has('bobot')) {
             $request->merge(['bobot' => 0]);
         }
 
@@ -201,23 +214,25 @@ class ProjectTimelineController extends Controller
         ]);
 
         $project = Project::findOrFail($data['project_id']);
+        $this->ensureCanManageProject($project);
+        $this->ensureCanUseUsers($data['user_ids'] ?? []);
 
         // Validasi rentang tanggal project
         if ($data['tanggal_mulai'] < $project->tanggal_mulai->format('Y-m-d') || $data['tanggal_selesai'] > $project->tanggal_selesai->format('Y-m-d')) {
-            return back()->withErrors(['tanggal_mulai' => 'Tanggal modul harus berada di dalam rentang tanggal project (' . $project->tanggal_mulai->format('d-m-Y') . ' s/d ' . $project->tanggal_selesai->format('d-m-Y') . ')'])->withInput();
+            return back()->withErrors(['tanggal_mulai' => 'Tanggal modul harus berada di dalam rentang tanggal proyek ('.$project->tanggal_mulai->format('d-m-Y').' s/d '.$project->tanggal_selesai->format('d-m-Y').')'])->withInput();
         }
 
         // Validasi total bobot tidak boleh melebihi 100%
         if ($data['bobot'] > 0) {
             $currentWeightSum = ProjectModule::where('project_id', $project->id)->sum('bobot');
             if (($currentWeightSum + $data['bobot']) > 100.0) {
-                return back()->withErrors(['bobot' => 'Total bobot seluruh modul project ini tidak boleh melebihi 100% (saat ini total: ' . $currentWeightSum . '%).'])->withInput();
+                return back()->withErrors(['bobot' => 'Total bobot seluruh modul proyek ini tidak boleh melebihi 100% (total saat ini: '.$currentWeightSum.'%).'])->withInput();
             }
         }
 
         // Default timeline
         $timelineId = $data['timeline_id'] ?? null;
-        if (!$timelineId) {
+        if (! $timelineId) {
             $timeline = ProjectTimeline::where('project_id', $project->id)->first();
             if (! $timeline) {
                 $timeline = ProjectTimeline::create([
@@ -228,6 +243,8 @@ class ProjectTimelineController extends Controller
                 ]);
             }
             $timelineId = $timeline->id;
+        } else {
+            $this->ensureTimelineBelongsToProject((int) $timelineId, $project);
         }
 
         $module = ProjectModule::create([
@@ -243,14 +260,14 @@ class ProjectTimelineController extends Controller
             'urutan' => ProjectModule::where('project_id', $project->id)->max('urutan') + 1,
         ]);
 
-        if (!empty($data['user_ids'])) {
+        if (! empty($data['user_ids'])) {
             $module->members()->sync($data['user_ids']);
         }
 
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $project->id,
-            'aktivitas' => 'Admin membuat modul baru: ' . $module->nama . ' (Bobot: ' . $module->bobot . '%, Jadwal: ' . $module->tanggal_mulai->format('d/m/Y') . ' - ' . $module->tanggal_selesai->format('d/m/Y') . ')',
+            'aktivitas' => 'Admin membuat modul baru: '.$module->nama.' (Bobot: '.$module->bobot.'%, Jadwal: '.$module->tanggal_mulai->format('d/m/Y').' - '.$module->tanggal_selesai->format('d/m/Y').')',
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Modul pekerjaan berhasil dibuat.');
@@ -259,7 +276,7 @@ class ProjectTimelineController extends Controller
     public function updateModule(Request $request, ProjectModule $module)
     {
         // Compatibility check: default bobot to current value if missing
-        if (!$request->has('bobot')) {
+        if (! $request->has('bobot')) {
             $request->merge(['bobot' => $module->bobot ?? 0]);
         }
 
@@ -282,16 +299,18 @@ class ProjectTimelineController extends Controller
         ]);
 
         $project = $module->project;
+        $this->ensureCanManageProject($project);
+        $this->ensureCanUseUsers($data['user_ids'] ?? []);
 
         // Validasi rentang tanggal project
         if ($data['tanggal_mulai'] < $project->tanggal_mulai->format('Y-m-d') || $data['tanggal_selesai'] > $project->tanggal_selesai->format('Y-m-d')) {
-            return back()->withErrors(['tanggal_mulai' => 'Tanggal modul harus berada di dalam rentang tanggal project (' . $project->tanggal_mulai->format('d-m-Y') . ' s/d ' . $project->tanggal_selesai->format('d-m-Y') . ')'])->withInput();
+            return back()->withErrors(['tanggal_mulai' => 'Tanggal modul harus berada di dalam rentang tanggal proyek ('.$project->tanggal_mulai->format('d-m-Y').' s/d '.$project->tanggal_selesai->format('d-m-Y').')'])->withInput();
         }
 
         // Validasi total bobot tidak boleh melebihi 100%
         $currentWeightSum = ProjectModule::where('project_id', $project->id)->where('id', '!=', $module->id)->sum('bobot');
         if (($currentWeightSum + $data['bobot']) > 100.0) {
-            return back()->withErrors(['bobot' => 'Total bobot seluruh modul project ini tidak boleh melebihi 100% (saat ini total modul lain: ' . $currentWeightSum . '%).'])->withInput();
+            return back()->withErrors(['bobot' => 'Total bobot seluruh modul proyek ini tidak boleh melebihi 100% (total modul lain saat ini: '.$currentWeightSum.'%).'])->withInput();
         }
 
         $oldName = $module->nama;
@@ -318,7 +337,7 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $project->id,
-            'aktivitas' => 'Admin memperbarui modul: ' . $oldName . ' -> ' . $module->nama . ' (Bobot: ' . $oldBobot . '% -> ' . $module->bobot . '%, Jadwal: [' . $oldStart . ' - ' . $oldEnd . '] -> [' . $module->tanggal_mulai->format('d/m/Y') . ' - ' . $module->tanggal_selesai->format('d/m/Y') . '])',
+            'aktivitas' => 'Admin memperbarui modul: '.$oldName.' -> '.$module->nama.' (Bobot: '.$oldBobot.'% -> '.$module->bobot.'%, Jadwal: ['.$oldStart.' - '.$oldEnd.'] -> ['.$module->tanggal_mulai->format('d/m/Y').' - '.$module->tanggal_selesai->format('d/m/Y').'])',
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Modul pekerjaan berhasil diperbarui.');
@@ -327,6 +346,7 @@ class ProjectTimelineController extends Controller
     public function destroyModule(ProjectModule $module)
     {
         $project = $module->project;
+        $this->ensureCanManageProject($project);
         $moduleName = $module->nama;
 
         // Hapus task otomatis terkait terlebih dahulu
@@ -336,7 +356,7 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $project->id,
-            'aktivitas' => 'Admin menghapus modul: ' . $moduleName,
+            'aktivitas' => 'Admin menghapus modul: '.$moduleName,
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Modul pekerjaan berhasil dihapus.');
@@ -354,11 +374,24 @@ class ProjectTimelineController extends Controller
         $timelines = ProjectTimeline::whereIn('id', collect($data['modules'])->pluck('timeline_id')->unique())
             ->get()
             ->keyBy('id');
+        $modules = ProjectModule::with('project')
+            ->whereIn('id', collect($data['modules'])->pluck('id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($timelines as $timeline) {
+            $this->ensureCanManageProject($timeline->project);
+        }
+
+        foreach ($modules as $module) {
+            $this->ensureCanManageProject($module->project);
+        }
 
         foreach ($data['modules'] as $moduleOrder) {
             $timeline = $timelines->get((int) $moduleOrder['timeline_id']);
-            if ($timeline) {
-                ProjectModule::where('id', $moduleOrder['id'])->update([
+            $module = $modules->get((int) $moduleOrder['id']);
+            if ($timeline && $module && (int) $module->project_id === (int) $timeline->project_id) {
+                ProjectModule::where('id', $module->id)->update([
                     'timeline_id' => $timeline->id,
                     'urutan' => $moduleOrder['urutan'],
                 ]);
@@ -379,21 +412,24 @@ class ProjectTimelineController extends Controller
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
             'user_id' => 'nullable|exists:md_user,id',
         ], [
-            'judul.required' => 'Judul task wajib diisi.',
+            'judul.required' => 'Judul tugas wajib diisi.',
             'module_id.required' => 'Wajib memilih modul.',
-            'tanggal_selesai.after_or_equal' => 'Deadline task harus sama atau setelah tanggal mulai.',
+            'tanggal_selesai.after_or_equal' => 'Tanggal selesai tugas harus sama dengan atau setelah tanggal mulai.',
         ]);
 
         $module = ProjectModule::findOrFail($data['module_id']);
         if ((int) $module->project_id !== (int) $data['project_id']) {
             return redirect()->route('admin.dashboard', ['tab' => 'timeline'])
-                ->with('error_swal', 'Modul tidak sesuai dengan project.');
+                ->with('error_swal', 'Modul tidak sesuai dengan proyek.');
         }
 
+        $project = Project::findOrFail($data['project_id']);
+        $this->ensureCanManageProject($project);
+
         $userId = isset($data['user_id']) ? (int) $data['user_id'] : null;
+        $this->ensureCanUseUsers($userId ? [$userId] : []);
 
         if ($userId) {
-            $project = Project::findOrFail($data['project_id']);
             if (! $project->members()->where('md_user.id', $userId)->exists()) {
                 $project->members()->attach($userId);
             }
@@ -428,10 +464,10 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $module->project_id,
-            'aktivitas' => 'Admin membuat task baru: ' . $task->judul . ' pada modul ' . $module->nama . ($userId ? ' dan menugaskannya ke PIC.' : ''),
+            'aktivitas' => 'Admin membuat tugas baru: '.$task->judul.' pada modul '.$module->nama.($userId ? ' dan menugaskannya ke penanggung jawab.' : ''),
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Task pekerjaan berhasil dibuat.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Tugas pekerjaan berhasil dibuat.');
     }
 
     public function assignTaskPIC(Request $request, ProjectTask $task)
@@ -439,6 +475,9 @@ class ProjectTimelineController extends Controller
         $data = $request->validate([
             'user_id' => 'required|exists:md_user,id',
         ]);
+
+        $this->ensureCanManageProject($task->project);
+        $this->ensureCanUseUsers([(int) $data['user_id']]);
 
         if (! $task->project->members()->where('md_user.id', $data['user_id'])->exists()) {
             $task->project->members()->attach($data['user_id']);
@@ -463,16 +502,18 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => 'Admin menugaskan task: ' . $task->judul . ' ke ' . $task->user->nama,
+            'aktivitas' => 'Admin menugaskan tugas: '.$task->judul.' ke '.$task->user->nama,
         ]);
 
-        return back()->with('success_swal', 'Berhasil menugaskan PIC ke task pekerjaan.');
+        return back()->with('success_swal', 'Penanggung jawab tugas berhasil ditetapkan.');
     }
 
     public function unassignTaskPIC(ProjectTask $task)
     {
-        $oldPicName = $task->user ? $task->user->nama : 'PIC';
-        
+        $this->ensureCanManageProject($task->project);
+
+        $oldPicName = $task->user ? $task->user->nama : 'penanggung jawab';
+
         $task->update([
             'user_id' => null,
             'status' => 'belum_dikerjakan',
@@ -485,14 +526,16 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => 'Admin menghapus penugasan PIC (' . $oldPicName . ') dari task: ' . $task->judul,
+            'aktivitas' => 'Admin melepas penanggung jawab ('.$oldPicName.') dari tugas: '.$task->judul,
         ]);
 
-        return back()->with('success_swal', 'Berhasil melepas PIC dari task.');
+        return back()->with('success_swal', 'Penanggung jawab tugas berhasil dilepas.');
     }
 
     public function destroyTask(ProjectTask $task)
     {
+        $this->ensureCanManageProject($task->project);
+
         $judul = $task->judul;
         $projectId = $task->project_id;
         $module = $task->module;
@@ -512,24 +555,28 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $projectId,
-            'aktivitas' => 'Admin menghapus task: ' . $judul,
+            'aktivitas' => 'Admin menghapus tugas: '.$judul,
         ]);
 
-        return back()->with('success_swal', 'Task berhasil dihapus.');
+        return back()->with('success_swal', 'Tugas berhasil dihapus.');
     }
 
     public function lockTask(ProjectTask $task)
     {
+        $this->ensureCanManageProject($task->project);
+
         $task->update([
             'status' => 'locked',
             'join_ditutup_pada' => now(config('app.timezone')),
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Join task berhasil ditutup.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Tugas tidak bisa diambil peserta untuk sementara.');
     }
 
     public function reopenTask(ProjectTask $task)
     {
+        $this->ensureCanManageProject($task->project);
+
         $now = now(config('app.timezone'));
         $task->update([
             'status' => 'open',
@@ -537,7 +584,7 @@ class ProjectTimelineController extends Controller
             'join_ditutup_pada' => $now->copy()->addMinutes($task->join_window_minutes ?: 5),
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Join task dibuka ulang.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Tugas kembali bisa diambil peserta.');
     }
 
     public function submitTask(Request $request, ProjectTaskParticipant $participant)
@@ -586,11 +633,13 @@ class ProjectTimelineController extends Controller
             'lampiran' => $lampiranPath,
         ]);
 
-        return redirect()->route('absensi.index', ['tab' => 'timeline'])->with('success_swal', 'Laporan pekerjaan berhasil dikirim untuk review admin.');
+        return redirect()->route('absensi.index', ['tab' => 'timeline'])->with('success_swal', 'Laporan pekerjaan berhasil dikirim untuk ditinjau admin.');
     }
 
     public function approveSubmission(WorkSubmission $submission)
     {
+        $this->ensureCanManageProject($submission->task->project);
+
         $submission->update([
             'status' => WorkSubmission::STATUS_APPROVED,
             'reviewed_at' => now(config('app.timezone')),
@@ -609,7 +658,7 @@ class ProjectTimelineController extends Controller
             'task_id' => $submission->task_id,
             'user_id' => Auth::id(),
             'tipe' => 'approve',
-            'isi' => 'Submission disetujui admin.',
+            'isi' => 'Laporan pekerjaan disetujui admin.',
         ]);
 
         // Rekalkulasi progress modul otomatis
@@ -617,11 +666,13 @@ class ProjectTimelineController extends Controller
             $submission->task->recalculateModuleProgress();
         }
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Submission berhasil di-approve.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Laporan pekerjaan berhasil disetujui.');
     }
 
     public function revisionSubmission(Request $request, WorkSubmission $submission)
     {
+        $this->ensureCanManageProject($submission->task->project);
+
         $data = $request->validate([
             'review_note' => 'required|string',
         ], [
@@ -654,7 +705,7 @@ class ProjectTimelineController extends Controller
             $submission->task->recalculateModuleProgress();
         }
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Submission dikembalikan untuk revisi.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Laporan pekerjaan dikembalikan untuk revisi.');
     }
 
     public function replySubmission(Request $request, WorkSubmission $submission)
@@ -694,21 +745,22 @@ class ProjectTimelineController extends Controller
             'judul' => 'required|string|max:150',
             'catatan' => 'nullable|string',
         ], [
-            'judul.required' => 'Judul note wajib diisi.',
-            'kategori.required' => 'Kategori note wajib dipilih.',
+            'judul.required' => 'Judul catatan wajib diisi.',
+            'kategori.required' => 'Kategori catatan wajib dipilih.',
         ]);
 
         $project = Project::with('members')->findOrFail($data['project_id']);
+        $this->ensureCanManageProject($project);
         $tanggal = Carbon::parse($data['tanggal'])->toDateString();
 
         if ($tanggal < $project->tanggal_mulai->toDateString() || $tanggal > $project->tanggal_selesai->toDateString()) {
-            return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('error_swal', 'Tanggal note harus berada di rentang project.');
+            return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('error_swal', 'Tanggal catatan harus berada di rentang proyek.');
         }
 
         $userId = isset($data['user_id']) ? (int) $data['user_id'] : null;
 
         if ($userId && ! $project->members->contains('id', $userId)) {
-            return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('error_swal', 'Peserta magang note harus termasuk anggota project.');
+            return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('error_swal', 'Peserta magang pada catatan harus termasuk anggota proyek.');
         }
 
         ProjectNote::create([
@@ -732,6 +784,8 @@ class ProjectTimelineController extends Controller
         ]);
 
         $project = Project::with('members')->findOrFail($data['project_id']);
+        $this->ensureCanManageProject($project);
+        $this->ensureCanUseUsers([(int) $data['user_id']]);
         $tanggal = Carbon::parse($data['tanggal'])->toDateString();
 
         if ($tanggal < $project->tanggal_mulai->toDateString() || $tanggal > $project->tanggal_selesai->toDateString()) {
@@ -763,6 +817,8 @@ class ProjectTimelineController extends Controller
 
     public function removeDayAssignment(ProjectDayAssignment $assignment)
     {
+        $this->ensureCanManageProject($assignment->project);
+
         $assignment->delete();
 
         return response()->json(['message' => 'Assignment peserta magang berhasil dihapus.']);
@@ -775,7 +831,7 @@ class ProjectTimelineController extends Controller
             'redirect_tab' => 'nullable|in:timeline',
         ]);
 
-        $isAdmin = Auth::check() && Auth::user()->role === 'superadmin';
+        $isAdmin = Auth::check() && in_array(Auth::user()->role, ['admin', 'superadmin'], true);
 
         if (! $isAdmin) {
             if (! $request->filled('user_id')) {
@@ -796,6 +852,8 @@ class ProjectTimelineController extends Controller
                 'user_selesai_pada' => now(config('app.timezone')),
             ]);
         } else {
+            $this->ensureCanManageProject($note->project);
+
             $note->update([
                 'selesai_pada' => now(config('app.timezone')),
             ]);
@@ -820,13 +878,13 @@ class ProjectTimelineController extends Controller
 
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'dat');
         $filename = now(config('app.timezone'))->format('Ymd_His')
-            . '_' . $userId
-            . '_' . Str::random(10)
-            . '.' . $extension;
+            .'_'.$userId
+            .'_'.Str::random(10)
+            .'.'.$extension;
 
         $file->move($uploadDir, $filename);
 
-        return $relativeDir . '/' . $filename;
+        return $relativeDir.'/'.$filename;
     }
 
     private function validatedModuleMemberIds(Project $project, array $userIds)
@@ -836,11 +894,84 @@ class ProjectTimelineController extends Controller
 
         if ($selectedIds->diff($projectMemberIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'user_ids' => 'PIC modul harus termasuk anggota project.',
+                'user_ids' => 'Penanggung jawab modul harus termasuk anggota proyek.',
             ]);
         }
 
         return $selectedIds;
+    }
+
+    private function ensureCanManageProject(Project $project): void
+    {
+        $admin = Auth::user();
+
+        if (! $admin || ! in_array($admin->role, ['admin', 'superadmin'], true)) {
+            abort(403);
+        }
+
+        if ($admin->role === 'superadmin') {
+            return;
+        }
+
+        if (! $admin->bidang_id) {
+            abort(403, 'Admin bidang belum memiliki bidang akses.');
+        }
+
+        $project->loadMissing(['user', 'members']);
+        $bidangId = (int) $admin->bidang_id;
+        $ownerInBidang = (int) ($project->user?->bidang_id ?? 0) === $bidangId;
+        $memberInBidang = $project->members->contains(fn (User $member): bool => (int) $member->bidang_id === $bidangId);
+
+        if (! $ownerInBidang && ! $memberInBidang) {
+            abort(403, 'Admin bidang hanya dapat mengelola timeline pada bidangnya.');
+        }
+    }
+
+    private function ensureCanUseUsers(array $userIds): void
+    {
+        $admin = Auth::user();
+
+        if (! $admin || $admin->role === 'superadmin') {
+            return;
+        }
+
+        if (! $admin->bidang_id) {
+            throw ValidationException::withMessages([
+                'user_ids' => 'Admin bidang belum memiliki bidang akses.',
+            ]);
+        }
+
+        $ids = collect($userIds)
+            ->filter(fn ($id): bool => (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        $validCount = User::where('role', 'user')
+            ->where('bidang_id', $admin->bidang_id)
+            ->whereIn('id', $ids->all())
+            ->count();
+
+        if ($validCount !== $ids->count()) {
+            throw ValidationException::withMessages([
+                'user_ids' => 'Admin bidang hanya dapat memilih peserta magang dari bidangnya.',
+            ]);
+        }
+    }
+
+    private function ensureTimelineBelongsToProject(int $timelineId, Project $project): void
+    {
+        $timeline = ProjectTimeline::findOrFail($timelineId);
+
+        if ((int) $timeline->project_id !== (int) $project->id) {
+            throw ValidationException::withMessages([
+                'timeline_id' => 'Timeline tidak sesuai dengan proyek.',
+            ]);
+        }
     }
 
     private function syncPrimaryTimeline(Project $project): ProjectTimeline
@@ -853,7 +984,7 @@ class ProjectTimelineController extends Controller
         if (! $timeline) {
             return ProjectTimeline::create([
                 'project_id' => $project->id,
-                'nama' => 'Timeline Project',
+                'nama' => 'Timeline Proyek',
                 'tanggal_mulai' => $project->tanggal_mulai,
                 'tanggal_selesai' => $project->tanggal_selesai,
                 'status' => 'berjalan',
@@ -862,7 +993,7 @@ class ProjectTimelineController extends Controller
         }
 
         $timeline->update([
-            'nama' => in_array($timeline->nama, ['Timeline Utama', 'Timeline Project'], true) ? 'Timeline Project' : $timeline->nama,
+            'nama' => in_array($timeline->nama, ['Timeline Utama', 'Timeline Project', 'Timeline Proyek'], true) ? 'Timeline Proyek' : $timeline->nama,
             'tanggal_mulai' => $project->tanggal_mulai,
             'tanggal_selesai' => $project->tanggal_selesai,
             'status' => $timeline->status ?: 'berjalan',
@@ -917,7 +1048,7 @@ class ProjectTimelineController extends Controller
     public function selfAssignTask(ProjectTask $task)
     {
         if ($task->user_id) {
-            return back()->with('error_swal', 'Task ini sudah diambil oleh peserta lain.');
+            return back()->with('error_swal', 'Tugas ini sudah diambil oleh peserta lain.');
         }
 
         // Enforce Focused Workflow: check if user already has an active task
@@ -931,12 +1062,12 @@ class ProjectTimelineController extends Controller
         // Pastikan user terdaftar di project ini (atau project has no members)
         $project = $task->project;
         $userId = Auth::id();
-        if ($project->members()->exists() && !$project->members()->where('md_user.id', $userId)->exists()) {
-            return back()->with('error_swal', 'Anda bukan anggota dari project ini.');
+        if ($project->members()->exists() && ! $project->members()->where('md_user.id', $userId)->exists()) {
+            return back()->with('error_swal', 'Anda belum terdaftar sebagai anggota proyek ini.');
         }
 
         // Auto join project if they are not a member yet
-        if (!$project->members()->where('md_user.id', $userId)->exists()) {
+        if (! $project->members()->where('md_user.id', $userId)->exists()) {
             $project->members()->attach($userId);
         }
 
@@ -960,14 +1091,18 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => Auth::user()->nama . ' mengambil task: ' . $task->judul,
+            'aktivitas' => Auth::user()->nama.' mengambil tugas: '.$task->judul,
         ]);
 
-        return back()->with('success_swal', 'Berhasil mengambil task pekerjaan.');
+        return back()->with('success_swal', 'Tugas pekerjaan berhasil diambil.');
     }
 
     public function selfAssignModule(ProjectModule $module)
     {
+        if ($module->is_chosen) {
+            return back()->with('error_swal', 'Modul ini sudah dipilih oleh peserta lain.');
+        }
+
         // Enforce Focused Workflow: check if user already has an active task
         $hasActiveTask = ProjectTask::where('user_id', Auth::id())
             ->whereIn('status', ['sedang_dikerjakan', 'review', 'revision'])
@@ -979,12 +1114,12 @@ class ProjectTimelineController extends Controller
         // Pastikan user terdaftar di project ini (atau project has no members)
         $project = $module->project;
         $userId = Auth::id();
-        if ($project->members()->exists() && !$project->members()->where('md_user.id', $userId)->exists()) {
-            return back()->with('error_swal', 'Anda bukan anggota dari project ini.');
+        if ($project->members()->exists() && ! $project->members()->where('md_user.id', $userId)->exists()) {
+            return back()->with('error_swal', 'Anda belum terdaftar sebagai anggota proyek ini.');
         }
 
         // Auto join project if they are not a member yet
-        if (!$project->members()->where('md_user.id', $userId)->exists()) {
+        if (! $project->members()->where('md_user.id', $userId)->exists()) {
             $project->members()->attach($userId);
         }
 
@@ -993,8 +1128,8 @@ class ProjectTimelineController extends Controller
             'project_id' => $project->id,
             'module_id' => $module->id,
             'user_id' => $userId,
-            'judul' => 'Pengerjaan Modul: ' . $module->nama,
-            'deskripsi' => 'Pengerjaan seluruh modul ' . $module->nama,
+            'judul' => 'Pengerjaan Modul: '.$module->nama,
+            'deskripsi' => 'Pengerjaan seluruh modul '.$module->nama,
             'tanggal_mulai' => $module->tanggal_mulai,
             'tanggal_selesai' => $module->tanggal_selesai,
             'status' => 'sedang_dikerjakan',
@@ -1015,10 +1150,59 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => $userId,
             'project_id' => $project->id,
-            'aktivitas' => Auth::user()->nama . ' mengambil modul: ' . $module->nama,
+            'aktivitas' => Auth::user()->nama.' mengambil modul: '.$module->nama,
         ]);
 
         return back()->with('success_swal', 'Berhasil mengambil modul pekerjaan.');
+    }
+
+    public function cancelTask(ProjectTask $task)
+    {
+        if ((int) $task->user_id !== (int) Auth::id()) {
+            return back()->with('error_swal', 'Anda tidak memiliki hak untuk membatalkan tugas ini.');
+        }
+
+        if (! in_array($task->status, ['sedang_dikerjakan', 'revision'], true)) {
+            return back()->with('error_swal', 'Tugas yang sedang ditinjau atau sudah selesai tidak dapat dibatalkan.');
+        }
+
+        $userId = Auth::id();
+        $taskTitle = $task->judul;
+        $projectId = $task->project_id;
+        $moduleId = $task->module_id;
+        $isModuleTask = str_starts_with($task->judul, 'Pengerjaan Modul: ');
+
+        DB::transaction(function () use ($task, $userId, $isModuleTask, $moduleId) {
+            ProjectTaskParticipant::where('task_id', $task->id)
+                ->where('user_id', $userId)
+                ->delete();
+
+            if ($isModuleTask) {
+                $task->delete();
+                if ($moduleId) {
+                    $module = ProjectModule::find($moduleId);
+                    $module?->recalculateProgress();
+                }
+            } else {
+                $task->update([
+                    'user_id' => null,
+                    'status' => 'belum_dikerjakan',
+                    'catatan_revisi' => null,
+                    'laporan_kerja' => null,
+                    'file_lampiran' => null,
+                    'tanggal_selesai_kerja' => null,
+                ]);
+                $task->recalculateModuleProgress();
+            }
+        });
+
+        ActivityLog::create([
+            'user_id' => $userId,
+            'project_id' => $projectId,
+            'aktivitas' => Auth::user()->nama.' membatalkan pengerjaan: '.$taskTitle,
+        ]);
+
+        return back()->with('success_swal', 'Pilihan tugas/modul berhasil dibatalkan. Anda dapat memilih tugas atau modul lain.');
     }
 
     public function submitWorkTask(Request $request, ProjectTask $task)
@@ -1081,7 +1265,7 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => Auth::user()->nama . ' menyerahkan pekerjaan task: ' . $task->judul . ' untuk direview',
+            'aktivitas' => Auth::user()->nama.' menyerahkan pekerjaan tugas: '.$task->judul.' untuk ditinjau',
         ]);
 
         return redirect()->route('absensi.index', ['tab' => 'timeline'])->with('success_swal', 'Laporan pekerjaan berhasil dikirim.');
@@ -1089,6 +1273,8 @@ class ProjectTimelineController extends Controller
 
     public function approveTask(ProjectTask $task)
     {
+        $this->ensureCanManageProject($task->project);
+
         $task->update([
             'status' => 'selesai',
             'catatan_revisi' => null,
@@ -1099,7 +1285,7 @@ class ProjectTimelineController extends Controller
             $otherTasks = ProjectTask::where('module_id', $task->module_id)
                 ->where('id', '!=', $task->id)
                 ->get();
-            
+
             foreach ($otherTasks as $oTask) {
                 $oTask->update([
                     'status' => 'selesai',
@@ -1144,7 +1330,7 @@ class ProjectTimelineController extends Controller
                     'task_id' => $task->id,
                     'user_id' => Auth::id(),
                     'tipe' => 'approve',
-                    'isi' => 'Pekerjaan task disetujui admin secara final.',
+                    'isi' => 'Pekerjaan tugas disetujui admin.',
                 ]);
             }
         }
@@ -1152,14 +1338,16 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => 'Admin menyetujui pengerjaan task: ' . $task->judul,
+            'aktivitas' => 'Admin menyetujui pengerjaan tugas: '.$task->judul,
         ]);
 
-        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Task berhasil di-approve.');
+        return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Tugas berhasil disetujui.');
     }
 
     public function revisionTask(Request $request, ProjectTask $task)
     {
+        $this->ensureCanManageProject($task->project);
+
         $data = $request->validate([
             'review_note' => 'required|string',
         ], [
@@ -1206,7 +1394,7 @@ class ProjectTimelineController extends Controller
         ActivityLog::create([
             'user_id' => Auth::id(),
             'project_id' => $task->project_id,
-            'aktivitas' => 'Admin menolak/meminta revisi task: ' . $task->judul . ' dengan catatan: ' . $data['review_note'],
+            'aktivitas' => 'Admin meminta revisi tugas: '.$task->judul.' dengan catatan: '.$data['review_note'],
         ]);
 
         return redirect()->route('admin.dashboard', ['tab' => 'timeline'])->with('success_swal', 'Permintaan revisi berhasil dikirim.');

@@ -70,7 +70,7 @@ return new class extends Migration
         $days = ['senin', 'selasa', 'rabu', 'kamis', 'jumat'];
 
         foreach ($days as $day) {
-            $column = $day . '_status_id';
+            $column = $day.'_status_id';
 
             if (Schema::hasTable('md_jadwal_mingguan') && ! Schema::hasColumn('md_jadwal_mingguan', $column)) {
                 Schema::table('md_jadwal_mingguan', function (Blueprint $table) use ($column, $day) {
@@ -86,7 +86,7 @@ return new class extends Migration
             }
 
             foreach ($ids as $kode => $id) {
-                DB::table('md_jadwal_mingguan')->where($day, $kode)->update([$day . '_status_id' => $id]);
+                DB::table('md_jadwal_mingguan')->where($day, $kode)->update([$day.'_status_id' => $id]);
             }
         }
 
@@ -171,12 +171,12 @@ return new class extends Migration
 
         foreach ($this->masterKodeById('jadwal_status') as $id => $kode) {
             foreach ($days as $day) {
-                DB::table('md_jadwal_mingguan')->where($day . '_status_id', $id)->update([$day => $kode]);
+                DB::table('md_jadwal_mingguan')->where($day.'_status_id', $id)->update([$day => $kode]);
             }
         }
 
         foreach ($days as $day) {
-            $column = $day . '_status_id';
+            $column = $day.'_status_id';
             if (Schema::hasColumn('md_jadwal_mingguan', $column)) {
                 Schema::table('md_jadwal_mingguan', function (Blueprint $table) use ($column) {
                     $table->dropConstrainedForeignId($column);

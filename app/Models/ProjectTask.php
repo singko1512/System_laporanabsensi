@@ -10,6 +10,8 @@ class ProjectTask extends Model
 {
     use HasFactory;
 
+    public const MODULE_ASSIGNMENT_PREFIX = 'Pengerjaan Modul: ';
+
     protected $table = 'md_project_tasks';
 
     protected $fillable = [
@@ -98,5 +100,10 @@ class ProjectTask extends Model
         if ($this->module) {
             $this->module->recalculateProgress();
         }
+    }
+
+    public function isModuleAssignment(): bool
+    {
+        return str_starts_with((string) $this->judul, self::MODULE_ASSIGNMENT_PREFIX);
     }
 }

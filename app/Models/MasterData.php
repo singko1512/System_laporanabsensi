@@ -10,8 +10,11 @@ class MasterData extends Model
     use HasFactory;
 
     public const ABSENSI_STATUS = 'absensi_status';
+
     public const JADWAL_STATUS = 'jadwal_status';
+
     public const PROJECT_STATUS = 'project_status';
+
     public const NOTE_KATEGORI = 'note_kategori';
 
     protected $table = 'md_master_data';
@@ -30,6 +33,7 @@ class MasterData extends Model
     ];
 
     private static array $idCache = [];
+
     private static array $itemCache = [];
 
     public static function defaults(): array
@@ -78,7 +82,7 @@ class MasterData extends Model
 
     public static function idFor(string $jenis, string $kode): ?int
     {
-        $key = $jenis . ':' . $kode;
+        $key = $jenis.':'.$kode;
 
         if (! array_key_exists($key, self::$idCache)) {
             self::$idCache[$key] = self::where('jenis', $jenis)->where('kode', $kode)->value('id');

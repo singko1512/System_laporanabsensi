@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Workspace Magang')
+@section('title', 'Ruang Kerja Magang')
 
 @section('styles')
 <style>
 :root {
-    --radius: 16px;
+    --radius: 12px;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
 }
@@ -146,7 +146,7 @@
 @media (max-width: 480px) { .status-grid { grid-template-columns: 1fr 1fr; } }
 .status-card {
     border: 1.5px solid var(--border);
-    border-radius: 14px;
+    border-radius: 10px;
     background: var(--white);
     padding: 1rem 0.75rem;
     cursor: pointer;
@@ -157,6 +157,7 @@
 }
 .status-card:hover { border-color: #c7d2fe; background: #f5f3ff; }
 .btn-check:checked + .status-card { border-color: var(--primary); background: rgba(108,92,231,0.04); box-shadow: 0 0 0 3px rgba(108,92,231,0.1); }
+.btn-check:disabled + .status-card { opacity: 0.5; cursor: not-allowed; background: #f8fafc; border-color: #e2e8f0; pointer-events: none; }
 .s-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; margin-bottom: 0.6rem; }
 .s-icon-hadir { background: rgba(0,184,148,0.1); color: #00b894; }
 .s-icon-wfh { background: rgba(108,92,231,0.1); color: #6c5ce7; }
@@ -168,7 +169,7 @@
 /* ── Upload & Camera ── */
 .upload-zone {
     border: 2px dashed var(--border);
-    border-radius: 14px;
+    border-radius: 10px;
     padding: 1.5rem;
     text-align: center;
     cursor: pointer;
@@ -180,11 +181,11 @@
 .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .upload-preview { display: none; width: 100%; max-height: 200px; margin-top: 0.85rem; border-radius: 10px; object-fit: contain; }
 .file-name { display: none; margin-top: 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--primary); }
-.camera-panel { display: none; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0f172a; margin-top: 0.85rem; }
+.camera-panel { display: none; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #0f172a; margin-top: 0.85rem; }
 .camera-panel video { display: block; width: 100%; max-height: 260px; object-fit: cover; }
 .camera-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; background: #fff; border-top: 1px solid var(--border); }
 .camera-preview { display: none; width: 100%; max-height: 200px; object-fit: contain; background: #fff; }
-.camera-start-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 14px; background: #fff; margin-top: 0.85rem; }
+.camera-start-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; margin-top: 0.85rem; }
 .location-panel { display: none; }
 .location-panel.show { display: block; }
 .location-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
@@ -237,19 +238,52 @@
 <div class="container py-3">
     <!-- Workspace Header -->
     <div class="workspace-header mb-3">
-        <h5>Workspace Peserta Magang</h5>
+        <h5>Ruang Kerja Peserta Magang</h5>
         <span>Kelola tugas harian dan catat kehadiran Anda di satu tempat</span>
     </div>
 
-    <!-- 1. Project Overview (Top - Full Width) -->
-    @if ($timelineProjects->isNotEmpty())
-        @php $project = $timelineProjects->first(); @endphp
+    <!-- 1. Project Overview or Project Selector (Top - Full Width) -->
+    @if ($selectedProject)
+        @php $project = $selectedProject; @endphp
         <div class="project-overview-card">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                 <div>
-                    <span class="project-status-badge status-on-track">
-                        <i class="fa-solid fa-circle-play me-1"></i> Proyek Aktif
-                    </span>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="project-status-badge status-on-track">
+                            <i class="fa-solid fa-circle-play me-1"></i> Proyek Aktif
+                        </span>
+                        @if (!$hasActiveTask)
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2.5 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size:0.75rem;">
+                                    <i class="fa-solid fa-arrows-rotate me-1"></i> Ganti Proyek
+                                </button>
+                                <ul class="dropdown-menu shadow-sm border-0">
+                                    @if (isset($allActiveProjects) && $allActiveProjects->count() > 1)
+                                        <li class="dropdown-header small">Pilih Proyek Lain</li>
+                                        @foreach ($allActiveProjects as $pOption)
+                                            @if ($pOption->id !== $project->id)
+                                                <li>
+                                                    <a class="dropdown-item small" href="{{ route('absensi.index', ['project_id' => $pOption->id]) }}">
+                                                        <i class="fa-solid fa-folder me-1 text-primary"></i> {{ $pOption->nama }}
+                                                    </a>
+                                                </li>
+                                            @endif
+                                        @endforeach
+                                        <li><hr class="dropdown-divider"></li>
+                                    @endif
+                                    <li>
+                                        <a class="dropdown-item small text-danger" href="{{ route('absensi.index', ['reset_project' => 1]) }}">
+                                            <i class="fa-solid fa-rotate-left me-1"></i> Batalkan Pilihan
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        @else
+                            <span class="badge bg-light text-muted border rounded-pill py-1 px-2.5" style="font-size:0.75rem;" title="Batalkan tugas aktif pada 'Tugas Saya Hari Ini' untuk mengganti proyek">
+                                <i class="fa-solid fa-lock me-1"></i> Terkunci karena ada tugas aktif
+                            </span>
+                        @endif
+                    </div>
                     <h4 class="fw-bold mt-2 mb-1 text-dark">{{ $project->nama }}</h4>
                     <p class="text-muted small mb-0">
                         <i class="fa-regular fa-calendar me-1"></i> Durasi: {{ $project->tanggal_mulai->translatedFormat('d M Y') }} — {{ $project->tanggal_selesai->translatedFormat('d M Y') }}
@@ -267,8 +301,8 @@
                         </div>
                     </div>
                     <div>
-                        <div class="small fw-bold text-dark">Aktual Progress</div>
-                        <div class="text-muted small">Bobot Modul Selesai</div>
+                        <div class="small fw-bold text-dark">Progres Aktual</div>
+                        <div class="text-muted small">Berdasarkan modul selesai</div>
                     </div>
                 </div>
             </div>
@@ -278,7 +312,7 @@
             <div class="row g-3 align-items-center mt-2">
                 <div class="col-sm-6">
                     <div class="d-flex justify-content-between mb-1 small">
-                        <span class="text-muted">Progres Rencana (Linear)</span>
+                        <span class="text-muted">Target Jadwal</span>
                         <span class="fw-bold text-dark">{{ $project->planned_progress }}%</span>
                     </div>
                     <div class="progress-bar-slim">
@@ -287,7 +321,7 @@
                 </div>
                 <div class="col-sm-6">
                     <div class="d-flex justify-content-between mb-1 small">
-                        <span class="text-muted">Progres Aktual (Bobot Modul)</span>
+                        <span class="text-muted">Progres Pengerjaan</span>
                         <span class="fw-bold text-primary">{{ $project->actual_progress }}%</span>
                     </div>
                     <div class="progress-bar-slim">
@@ -296,14 +330,43 @@
                 </div>
             </div>
         </div>
+    @elseif (isset($allActiveProjects) && $allActiveProjects->isNotEmpty())
+        <!-- Project Selector Card when no project has been selected yet -->
+        <div class="project-overview-card p-4" style="background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(255,255,255,1) 100%); border: 1.5px dashed rgba(99,102,241,0.35);">
+            <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                <div>
+                    <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-1.5 fw-semibold mb-2">
+                        <i class="fa-solid fa-hand-pointer me-1"></i> Pilih Proyek Magang
+                    </span>
+                    <h5 class="fw-bold text-dark mb-1">Silakan Pilih Proyek Anda Terlebih Dahulu</h5>
+                    <p class="text-muted small mb-0">Pilih salah satu proyek aktif berikut untuk menampilkan modul pengerjaan dan tugas yang tersedia.</p>
+                </div>
+                <div class="w-100 w-md-auto" style="min-width: 280px; max-width: 400px;">
+                    <form action="{{ route('absensi.index') }}" method="GET" class="d-flex gap-2">
+                        <select name="project_id" class="form-select form-control-admin" required>
+                            <option value="" disabled selected>-- Pilih Proyek Aktif --</option>
+                            @foreach ($allActiveProjects as $pOption)
+                                <option value="{{ $pOption->id }}">
+                                    {{ $pOption->nama }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn btn-primary rounded-3 px-3.5 d-flex align-items-center gap-1.5" title="Terapkan Pilihan Proyek">
+                            <i class="fa-solid fa-check"></i>
+                            <span class="d-none d-sm-inline small fw-semibold">Pilih</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
     @else
-        <!-- Placeholder if no project assigned -->
+        <!-- Placeholder if no project exists in the system -->
         <div class="project-overview-card text-center py-4">
             <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width:48px; height:48px; background:rgba(99,102,241,0.06);">
                 <i class="fa-solid fa-folder-open text-primary" style="font-size:1.2rem;"></i>
             </div>
             <h6 class="fw-bold mb-1">Belum Ada Proyek Aktif</h6>
-            <p class="text-muted small mb-0">Hubungi admin untuk mendaftarkan Anda ke proyek magang agar dapat mengambil tugas.</p>
+            <p class="text-muted small mb-0">Hubungi admin untuk mendaftarkan proyek magang baru ke sistem.</p>
         </div>
     @endif
 
@@ -314,15 +377,15 @@
             <!-- Task Saya Hari Ini -->
             <div class="ws-card mb-4">
                 <div class="ws-card-header">
-                    <h6><i class="fa-solid fa-list-check me-2" style="color:var(--primary);"></i>Task Saya Hari Ini</h6>
-                    <span class="badge bg-primary rounded-pill">{{ $myTodayTasks->count() + $myReviewTasks->count() }} task</span>
+                    <h6><i class="fa-solid fa-list-check me-2" style="color:var(--primary);"></i>Tugas Saya Hari Ini</h6>
+                    <span class="badge bg-primary rounded-pill">{{ $myTodayTasks->count() + $myReviewTasks->count() }} tugas</span>
                 </div>
                 <div class="ws-card-body">
                     @if ($myTodayTasks->isEmpty() && $myReviewTasks->isEmpty())
                         <!-- Empty State -->
                         <div class="empty-state-ws">
                             <div class="empty-icon"><i class="fa-solid fa-list-check"></i></div>
-                            <h6>Tidak ada task aktif</h6>
+                            <h6>Tidak ada tugas aktif</h6>
                             <p>Ambil tugas baru di bawah untuk mulai mengerjakannya.</p>
                         </div>
                     @else
@@ -357,27 +420,34 @@
                                     </div>
                                 @endif
 
-                                <!-- Form Serahkan Tugas -->
-                                <div class="border-top pt-3 mt-2">
+                                <!-- Actions: Serahkan Tugas & Batal Pilih -->
+                                <div class="border-top pt-3 mt-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <button class="btn btn-outline-primary btn-sm rounded-pill" type="button" data-bs-toggle="collapse" data-bs-target="#submitForm-{{ $task->id }}">
                                         <i class="fa-solid fa-paper-plane me-1"></i> Serahkan Pekerjaan
                                     </button>
-                                    
-                                    <div class="collapse mt-3" id="submitForm-{{ $task->id }}">
-                                        <form action="{{ route('absensi.task.submit_work', $task) }}" method="POST" enctype="multipart/form-data">
-                                            @csrf
-                                            <div class="mb-3">
-                                                <label class="form-label-admin">Laporan Hasil Pekerjaan <span class="text-danger">*</span></label>
-                                                <textarea name="laporan_kerja" rows="3" class="form-control form-control-admin w-100" placeholder="Tuliskan rincian, kendala, atau tautan hasil pekerjaan Anda..." required></textarea>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label-admin">Unggah File Lampiran (Opsional)</label>
-                                                <input type="file" name="lampiran" class="form-control form-control-admin w-100" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip">
-                                                <div class="text-muted small mt-1" style="font-size:0.7rem;">Format: PDF, JPG, JPEG, PNG, WEBP, ZIP. Maks 10 MB.</div>
-                                            </div>
-                                            <button type="submit" class="btn btn-primary btn-sm rounded-3">Kirim Laporan</button>
-                                        </form>
-                                    </div>
+
+                                    <form action="{{ route('absensi.task.batal', $task) }}" method="POST" id="form-cancel-{{ $task->id }}" class="d-inline">
+                                        @csrf
+                                        <button type="button" class="btn btn-outline-danger btn-sm rounded-pill" onclick="confirmCancelTask('{{ $task->id }}', '{{ addslashes($task->judul) }}')">
+                                            <i class="fa-solid fa-rotate-left me-1"></i> Batal Pilih
+                                        </button>
+                                    </form>
+                                </div>
+                                
+                                <div class="collapse mt-3" id="submitForm-{{ $task->id }}">
+                                    <form action="{{ route('absensi.task.submit_work', $task) }}" method="POST" enctype="multipart/form-data">
+                                        @csrf
+                                        <div class="mb-3">
+                                            <label class="form-label-admin">Laporan Hasil Pekerjaan <span class="text-danger">*</span></label>
+                                            <textarea name="laporan_kerja" rows="3" class="form-control form-control-admin w-100" placeholder="Tuliskan rincian, kendala, atau tautan hasil pekerjaan Anda..." required></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label-admin">Unggah File Lampiran (Opsional)</label>
+                                            <input type="file" name="lampiran" class="form-control form-control-admin w-100" accept=".pdf,.jpg,.jpeg,.png,.webp,.zip">
+                                            <div class="text-muted small mt-1" style="font-size:0.7rem;">Format: PDF, JPG, JPEG, PNG, WEBP, ZIP. Maks 10 MB.</div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm rounded-3">Kirim Laporan</button>
+                                    </form>
                                 </div>
                             </div>
                         @endforeach
@@ -392,7 +462,7 @@
                                         <h6 class="fw-bold mt-1 text-dark mb-1">{{ $task->judul }}</h6>
                                         <p class="text-muted small mb-0"><i class="fa-regular fa-calendar me-1"></i>Diserahkan pada: {{ $task->tanggal_selesai_kerja ? $task->tanggal_selesai_kerja->translatedFormat('d M Y H:i') : '-' }}</p>
                                     </div>
-                                    <span class="task-badge task-badge-review"><i class="fa-regular fa-clock"></i> Review</span>
+                                    <span class="task-badge task-badge-review"><i class="fa-regular fa-clock"></i> Menunggu Ditinjau</span>
                                 </div>
                             </div>
                         @endforeach
@@ -405,86 +475,183 @@
                 <div class="focus-banner mb-4">
                     <div class="focus-banner-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
                     <div>
-                        <div class="fw-bold text-dark small">Alur Kerja Terfokus Aktif</div>
-                        <p class="text-muted small mb-0 mt-0.5">Selesaikan task aktif atau ajukan laporan pengerjaan Anda sebelum diperbolehkan mengambil tugas baru.</p>
+                        <div class="fw-bold text-dark small">Tugas Sedang Dikerjakan</div>
+                        <p class="text-muted small mb-0 mt-0.5">Selesaikan tugas aktif Anda atau klik tombol <strong>Batal Pilih</strong> pada tugas di atas jika ingin mengganti proyek.</p>
                     </div>
                 </div>
             @else
                 <div class="ws-card mb-4">
-                    <div class="ws-card-header">
-                        <h6><i class="fa-solid fa-briefcase me-2" style="color:var(--primary);"></i>Tugas & Modul yang Tersedia</h6>
+                    <div class="ws-card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fa-solid fa-briefcase me-2" style="color:var(--primary);"></i>Tugas & Modul yang Tersedia</h6>
+                        @if ($selectedProject)
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 rounded-pill" style="font-size:0.75rem;">
+                                <i class="fa-solid fa-folder me-1"></i> {{ $selectedProject->nama }}
+                            </span>
+                        @endif
                     </div>
                     <div class="ws-card-body">
-                        @if ($allAvailableTasks->isEmpty() && $availableModules->isEmpty())
+                        @if (!$selectedProject)
+                            <div class="text-center py-4">
+                                <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width:48px; height:48px; background:rgba(99,102,241,0.06);">
+                                    <i class="fa-solid fa-hand-pointer text-primary" style="font-size:1.2rem;"></i>
+                                </div>
+                                <h6 class="fw-bold mb-1">Proyek Belum Dipilih</h6>
+                                <p class="text-muted small mb-0">Silakan pilih proyek magang di bagian atas terlebih dahulu untuk menampilkan tugas dan modul yang tersedia.</p>
+                            </div>
+                        @elseif ($selectedProject->modules->isEmpty() && $allAvailableTasks->isEmpty())
                             <div class="text-center py-4">
                                 <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-2" style="width:48px; height:48px; background:rgba(99,102,241,0.06);">
                                     <i class="fa-solid fa-circle-check text-primary" style="font-size:1.2rem;"></i>
                                 </div>
-                                <h6 class="fw-bold mb-1">Semua beres!</h6>
-                                <p class="text-muted small mb-0">Tidak ada tugas atau modul baru yang tersedia untuk Anda saat ini.</p>
+                                <h6 class="fw-bold mb-1">Belum Ada Modul / Tugas</h6>
+                                <p class="text-muted small mb-0">Belum ada modul atau tugas yang dibuat oleh admin untuk proyek <strong>{{ $selectedProject->nama }}</strong> saat ini.</p>
                             </div>
                         @else
-                            @if ($allAvailableTasks->isNotEmpty())
+                            @php
+                                $standaloneTasks = $allAvailableTasks->whereNull('module_id');
+                            @endphp
+
+                            {{-- Render Each Module with its Breakdown Tasks --}}
+                            @foreach ($selectedProject->modules as $module)
                                 @php
-                                    $groupedTasks = $allAvailableTasks->groupBy(fn($t) => $t->module_id ? $t->module->nama : 'Tugas Umum');
+                                    $moduleTasks = $module->tasks->sortBy('urutan')->values();
+                                    $breakdownTasks = $moduleTasks->reject(fn ($task) => $task->isModuleAssignment())->values();
+                                    $moduleIsChosen = $module->is_chosen;
                                 @endphp
-                                @foreach ($groupedTasks as $moduleName => $tasks)
-                                    <div class="module-header mt-3">
-                                        <div class="module-icon"><i class="fa-solid fa-cubes"></i></div>
-                                        <span class="module-title">{{ $moduleName }}</span>
-                                        @if ($tasks->first()->module && $tasks->first()->module->bobot)
-                                            <span class="module-bobot">Bobot: {{ $tasks->first()->module->bobot }}%</span>
-                                        @endif
-                                    </div>
-                                    <div class="row g-3 mb-4">
-                                        @foreach ($tasks as $task)
-                                            <div class="col-md-6">
-                                                <div class="task-item">
-                                                    <div>
-                                                        <div class="task-item-title">{{ $task->judul }}</div>
-                                                        @if ($task->deskripsi)
-                                                            <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($task->deskripsi, 80) }}</p>
-                                                        @endif
-                                                        <div class="task-item-meta">
-                                                            <i class="fa-regular fa-calendar-xmark me-1"></i>Batas: {{ $task->tanggal_selesai ? $task->tanggal_selesai->translatedFormat('d M Y') : '-' }}
-                                                        </div>
-                                                    </div>
-                                                    <form action="{{ route('absensi.task.ambil', $task) }}" method="POST">
-                                                        @csrf
-                                                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 rounded-pill mt-2">
-                                                            <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Tugas
-                                                        </button>
-                                                    </form>
+                                <div class="p-3 mb-4 rounded-3 border bg-white shadow-xs" style="border-color: var(--border) !important;">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="module-icon" style="background:rgba(99,102,241,0.1); color:var(--primary); width:32px; height:32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;">
+                                                <i class="fa-solid fa-cubes" style="font-size:0.9rem;"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark fs-6">{{ $module->nama }}</div>
+                                                <div class="text-muted" style="font-size:0.75rem;">
+                                                    Bobot: <strong class="text-primary">{{ $module->bobot }}%</strong> &middot;
+                                                    Jadwal: {{ $module->tanggal_mulai ? $module->tanggal_mulai->translatedFormat('d M') : '-' }} s/d {{ $module->tanggal_selesai ? $module->tanggal_selesai->translatedFormat('d M Y') : '-' }}
                                                 </div>
                                             </div>
-                                        @endforeach
+                                        </div>
+                                        <span class="badge bg-light text-primary border px-2.5 py-1 rounded-pill" style="font-size:0.72rem;">
+                                            <i class="fa-solid fa-chart-pie me-1"></i>{{ $module->progress }}% Selesai
+                                        </span>
                                     </div>
-                                @endforeach
-                            @endif
 
-                            @if ($availableModules->isNotEmpty())
-                                <div class="module-header mt-4">
-                                    <div class="module-icon"><i class="fa-solid fa-folder-tree"></i></div>
-                                    <span class="module-title">Modul Pekerjaan yang Tersedia (Ambil Satu Modul Utuh)</span>
-                                </div>
-                                <div class="row g-3 mb-4">
-                                    @foreach ($availableModules as $module)
-                                        <div class="col-md-6">
-                                            <div class="task-item" style="border-color: #10b981 !important;">
-                                                <div>
-                                                    <div class="task-item-title text-success"><i class="fa-solid fa-cubes me-1"></i> {{ $module->nama }}</div>
-                                                    <p class="text-muted small mb-1" style="font-size:0.72rem;">Proyek: <strong>{{ $module->project->nama }}</strong></p>
-                                                    @if ($module->deskripsi)
-                                                        <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($module->deskripsi, 80) }}</p>
-                                                    @endif
-                                                    <div class="task-item-meta">
-                                                        Bobot Modul: {{ $module->bobot }}%
+                                    @if ($module->deskripsi)
+                                        <p class="text-muted small mb-3" style="font-size:0.75rem; line-height:1.45;">{{ $module->deskripsi }}</p>
+                                    @endif
+
+                                    {{-- Sub-task breakdown --}}
+                                    @if ($breakdownTasks->isNotEmpty() && $moduleIsChosen)
+                                        <div class="mt-2 pt-2 border-top" style="border-color: rgba(0,0,0,0.05) !important;">
+                                            <div class="fw-bold text-dark mb-2.5" style="font-size:0.78rem;">
+                                                <i class="fa-solid fa-list-check me-1 text-primary"></i> Pembagian Tugas Tim ({{ $breakdownTasks->count() }} tugas):
+                                            </div>
+                                            <div class="row g-2.5">
+                                                @foreach ($breakdownTasks as $task)
+                                                    <div class="col-md-6 mb-2">
+                                                        <div class="task-item p-3 h-100 d-flex flex-column justify-content-between rounded-3 border {{ $task->user_id ? 'bg-light opacity-90' : 'bg-white' }}" style="border-color: var(--border) !important;">
+                                                            <div>
+                                                                <div class="d-flex justify-content-between align-items-start gap-1 mb-1">
+                                                                    <div class="task-item-title fw-bold text-dark" style="font-size:0.85rem;">{{ $task->judul }}</div>
+                                                                    @if ($task->status === 'selesai')
+                                                                        <span class="badge bg-success-subtle text-success border border-success-subtle py-0.5 px-1.5 rounded" style="font-size:0.65rem;">Selesai</span>
+                                                                    @elseif ($task->status === 'review')
+                                                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle py-0.5 px-1.5 rounded" style="font-size:0.65rem;">Ditinjau</span>
+                                                                    @elseif ($task->status === 'sedang_dikerjakan')
+                                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-0.5 px-1.5 rounded" style="font-size:0.65rem;">Dikerjakan</span>
+                                                                    @else
+                                                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle py-0.5 px-1.5 rounded" style="font-size:0.65rem;">Tersedia</span>
+                                                                    @endif
+                                                                </div>
+                                                                @if ($task->deskripsi)
+                                                                    <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($task->deskripsi, 85) }}</p>
+                                                                @endif
+                                                                <div class="task-item-meta text-muted" style="font-size:0.72rem;">
+                                                                    <i class="fa-regular fa-calendar-xmark me-1"></i>Batas: {{ $task->tanggal_selesai ? $task->tanggal_selesai->translatedFormat('d M Y') : '-' }}
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mt-2.5 pt-2 border-top" style="border-color: rgba(0,0,0,0.06) !important;">
+                                                                @if (!$task->user_id && $task->status === 'belum_dikerjakan')
+                                                                    <form action="{{ route('absensi.task.ambil', $task) }}" method="POST">
+                                                                        @csrf
+                                                                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 rounded-pill">
+                                                                            <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Tugas Ini
+                                                                        </button>
+                                                                    </form>
+                                                                @else
+                                                                    <div class="d-flex align-items-center justify-content-between" style="font-size:0.73rem;">
+                                                                        <span class="text-muted">
+                                                                            <i class="fa-regular fa-user me-1"></i> Penanggung jawab: <strong class="text-dark">{{ $task->user->nama ?? '-' }}</strong>
+                                                                        </span>
+                                                                        <span class="text-muted fst-italic" style="font-size:0.7rem;">Sudah diambil</span>
+                                                                    </div>
+                                                                @endif
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @elseif ($breakdownTasks->isNotEmpty())
+                                        <div class="p-3 rounded-2 bg-light border border-dashed text-center">
+                                            <p class="text-muted small mb-2" style="font-size:0.75rem;">
+                                                <i class="fa-solid fa-lock me-1 text-primary"></i> Sub-tugas modul akan terbuka setelah modul ini dipilih.
+                                            </p>
+                                            <form action="{{ route('absensi.module.ambil', $module) }}" method="POST">
+                                                @csrf
+                                                <button type="submit" class="btn btn-outline-success btn-sm rounded-pill px-3">
+                                                    <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Modul Pekerjaan
+                                                </button>
+                                            </form>
+                                        </div>
+                                    @else
+                                        {{-- Empty module without tasks: allow taking full module --}}
+                                        <div class="p-3 rounded-2 bg-light border border-dashed text-center">
+                                            @if ($moduleIsChosen)
+                                                <p class="text-muted small mb-0" style="font-size:0.75rem;">
+                                                    <i class="fa-solid fa-circle-check me-1 text-primary"></i> Modul ini sudah dipilih dan sedang dikerjakan.
+                                                </p>
+                                            @else
+                                                <p class="text-muted small mb-2" style="font-size:0.75rem;">
+                                                    <i class="fa-solid fa-circle-info me-1 text-primary"></i> Modul ini belum dipecah menjadi sub-tugas. Anda dapat mengambil seluruh modul untuk dikerjakan.
+                                                </p>
                                                 <form action="{{ route('absensi.module.ambil', $module) }}" method="POST">
                                                     @csrf
-                                                    <button type="submit" class="btn btn-outline-success btn-sm w-100 rounded-pill mt-2">
-                                                        <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Modul Pekerjaan
+                                                    <button type="submit" class="btn btn-outline-success btn-sm rounded-pill px-3">
+                                                        <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Modul Pekerjaan Utuh
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+
+                            {{-- Standalone tasks not attached to any module --}}
+                            @if ($standaloneTasks->isNotEmpty())
+                                <div class="module-header mt-3">
+                                    <div class="module-icon"><i class="fa-solid fa-list-check"></i></div>
+                                    <span class="module-title">Tugas Tambahan / Umum</span>
+                                </div>
+                                <div class="row g-3 mb-4">
+                                    @foreach ($standaloneTasks as $task)
+                                        <div class="col-md-6 mb-2">
+                                            <div class="task-item p-3 h-100 d-flex flex-column justify-content-between rounded-3 border bg-white" style="border-color: var(--border) !important;">
+                                                <div>
+                                                    <div class="task-item-title fw-bold text-dark mb-1">{{ $task->judul }}</div>
+                                                    @if ($task->deskripsi)
+                                                        <p class="text-muted mb-2" style="font-size:0.75rem; line-height:1.4;">{{ \Illuminate\Support\Str::limit($task->deskripsi, 80) }}</p>
+                                                    @endif
+                                                    <div class="task-item-meta text-muted" style="font-size:0.72rem;">
+                                                        <i class="fa-regular fa-calendar-xmark me-1"></i>Batas: {{ $task->tanggal_selesai ? $task->tanggal_selesai->translatedFormat('d M Y') : '-' }}
+                                                    </div>
+                                                </div>
+                                                <form action="{{ route('absensi.task.ambil', $task) }}" method="POST" class="mt-2.5 pt-2 border-top" style="border-color: rgba(0,0,0,0.06) !important;">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-outline-primary btn-sm w-100 rounded-pill">
+                                                        <i class="fa-solid fa-hand-holding-hand me-1"></i> Ambil Tugas
                                                     </button>
                                                 </form>
                                             </div>
@@ -527,17 +694,24 @@
                         <!-- Location panel -->
                         <div class="mb-3 location-panel show" id="location_section">
                             <label class="form-label-admin">Verifikasi Lokasi <span class="text-danger">*</span></label>
-                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-center">
-                                <i class="fa-solid fa-location-dot text-primary" style="font-size:1.2rem;"></i>
-                                <div>
-                                    <div id="location_status" class="small">Klik Kunci Lokasi untuk mengambil koordinat Anda.</div>
-                                    <div class="location-meta mt-1 small">
-                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy">Akurasi: -</span>
-                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates">Koordinat: -</span>
+                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-start">
+                                <i class="fa-solid fa-location-dot text-primary mt-1" style="font-size:1.3rem;"></i>
+                                <div class="w-100">
+                                    <div id="location_status" class="small fw-semibold text-dark">Klik tombol di bawah untuk mengunci lokasi.</div>
+                                    <div id="location_address" class="small text-muted mt-1" style="display:none;"></div>
+                                    <div class="location-meta mt-2 d-flex flex-wrap gap-1 align-items-center" style="display:none;">
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy" style="display:none;">Akurasi: -</span>
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates" style="display:none;">Koordinat: -</span>
+                                        <a href="#" target="_blank" id="location_map_link" class="badge bg-primary-subtle text-primary text-decoration-none" style="display:none;">
+                                            <i class="fa-solid fa-map-location-dot me-1"></i> Buka Google Maps
+                                        </a>
                                     </div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2 rounded-3" id="lock_location">
-                                        <i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi
-                                    </button>
+                                    <div class="mt-2 d-flex align-items-center gap-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm rounded-3" id="lock_location">
+                                            <i class="fa-solid fa-location-dot me-1"></i> Kunci Lokasi
+                                        </button>
+                                        <span id="location_spinner" class="spinner-border spinner-border-sm text-primary" style="display:none;" role="status"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -555,7 +729,7 @@
                                 </div>
                                 <div class="camera-panel" id="camera_panel" style="display: none;">
                                     <video id="camera_video" autoplay playsinline muted></video>
-                                    <img src="" class="camera-preview" id="camera_preview" alt="Preview foto">
+                                    <img src="" class="camera-preview" id="camera_preview" alt="Pratinjau foto">
                                     <canvas id="camera_canvas" class="d-none"></canvas>
                                     <div class="camera-actions p-2 bg-light border-top d-flex justify-content-between align-items-center">
                                         <span class="camera-message small text-muted" id="camera_message">Kamera Aktif</span>
@@ -583,15 +757,15 @@
                             </div>
 
                             <!-- Required Keterangan/Laporan for Hadir/WFH checkout -->
-                            <div class="mb-3">
+                            <div class="mb-3" id="laporan_section" style="display: block;">
                                 <label for="laporan" id="laporan_label" class="form-label-admin">Laporan Hasil Pekerjaan Hari Ini <span class="text-danger">*</span></label>
                                 <textarea name="keterangan" id="laporan" rows="3" class="form-control form-control-admin w-100" placeholder="Jelaskan progres pekerjaan Anda hari ini..." required>{{ old('keterangan') }}</textarea>
                             </div>
                         @else
                             <!-- Optional Keterangan for Sakit/Izin checkout -->
-                            <div class="mb-3">
+                            <div class="mb-3" id="laporan_section" style="display: block;">
                                 <label for="laporan" id="laporan_label" class="form-label-admin">Catatan/Keterangan Tambahan</label>
-                                <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Keterangan tambahan..." required>{{ old('keterangan') }}</textarea>
+                                <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Keterangan tambahan...">{{ old('keterangan') }}</textarea>
                             </div>
                         @endif
 
@@ -604,17 +778,26 @@
                     <h6 class="fw-bold mb-3"><i class="fa-solid fa-right-to-bracket me-2 text-primary"></i>Absen Masuk</h6>
                     
                     @php
-                        $hasProjects = $timelineProjects->isNotEmpty();
+                        $hasProjects = isset($allActiveProjects) && $allActiveProjects->isNotEmpty();
                         $hasAvailableTasks = $allAvailableTasks->isNotEmpty();
-                        // Disabling Hadir/WFH only if they have projects but no active task AND no available tasks to pick.
-                        $isHadirWfhDisabled = $hasProjects && !$hasActiveTask && !$hasAvailableTasks;
+                        $isProjectNotSelected = !$selectedProject && !$hasActiveTask;
+                        $isHadirWfhDisabled = ($hasProjects && !$hasActiveTask) || $isProjectNotSelected;
                     @endphp
 
-                    @if ($isHadirWfhDisabled)
+                    @if ($isProjectNotSelected && $hasProjects)
+                        <div class="alert alert-info py-2.5 px-3 rounded-3 small mb-3">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            Silakan <strong>pilih proyek aktif</strong> terlebih dahulu pada bagian atas sebelum melakukan absensi Hadir/WFH.
+                        </div>
+                    @elseif ($isHadirWfhDisabled)
                         <!-- Warning banner for workflow terfokus when no tasks available -->
                         <div class="alert alert-warning py-2.5 px-3 rounded-3 small mb-3">
                             <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                            Pilihan status <strong>Hadir/WFH</strong> dinonaktifkan karena tidak ada tugas (task) yang tersedia untuk proyek Anda. Hubungi admin untuk menambahkan tugas baru.
+                            @if ($hasAvailableTasks)
+                                Pilih dan ambil <strong>satu tugas</strong> dari daftar di atas sebelum melakukan absensi Hadir/WFH.
+                            @else
+                                Pilihan <strong>Hadir/WFH</strong> belum bisa dipakai karena belum ada tugas yang tersedia di proyek ini. Hubungi admin untuk menambahkan tugas baru.
+                            @endif
                         </div>
                     @endif
 
@@ -626,29 +809,7 @@
 
                         @if ($hasActiveTask)
                             @php $activeTaskId = $myTodayTasks->first() ? $myTodayTasks->first()->id : null; @endphp
-                            <!-- Active task info block -->
-                            <div class="mb-3" id="active_task_info_container">
-                                <label class="form-label-admin">Tugas Aktif yang Sedang Dikerjakan</label>
-                                <div class="p-2.5 border rounded-3 bg-light text-dark small fw-semibold">
-                                    <i class="fa-solid fa-circle-play text-primary me-1"></i>
-                                    [{{ $myTodayTasks->first() ? $myTodayTasks->first()->project->nama : 'Project' }}] {{ $myTodayTasks->first() ? $myTodayTasks->first()->judul : '-' }}
-                                </div>
-                                <input type="hidden" name="task_id" value="{{ $activeTaskId }}">
-                            </div>
-                        @elseif ($hasAvailableTasks)
-                            <!-- Task Selection dropdown for check-in -->
-                            <div class="mb-3" id="task_selection_container" style="display: none;">
-                                <label for="task_id_select" class="form-label-admin">Pilih Tugas yang Akan Dikerjakan <span class="text-danger">*</span></label>
-                                <select name="task_id" id="task_id_select" class="form-select form-control-admin w-100" required>
-                                    <option value="" disabled selected>-- Pilih Tugas --</option>
-                                    @foreach ($allAvailableTasks as $task)
-                                        <option value="{{ $task->id }}">
-                                            [{{ $task->project->nama }} - {{ $task->module->nama ?? 'Umum' }}] {{ $task->judul }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="text-muted small mt-1" style="font-size:0.7rem;">Pilih tugas untuk memulai Focused Workflow hari ini.</div>
-                            </div>
+                            <input type="hidden" name="task_id" value="{{ $activeTaskId }}">
                         @endif
 
                         <!-- Status Absensi Radios -->
@@ -658,7 +819,7 @@
                                 
                                 <!-- Hadir -->
                                 <div>
-                                    <input type="radio" class="btn-check" name="status" id="status_hadir" value="hadir" {{ old('status', 'hadir') === 'hadir' ? 'checked' : '' }} {{ $isHadirWfhDisabled ? 'disabled' : '' }} autocomplete="off">
+                                    <input type="radio" class="btn-check" name="status" id="status_hadir" value="hadir" {{ old('status', $isHadirWfhDisabled ? 'sakit' : 'hadir') === 'hadir' ? 'checked' : '' }} {{ $isHadirWfhDisabled ? 'disabled' : '' }} autocomplete="off">
                                     <label class="status-card" for="status_hadir">
                                         <div class="s-icon s-icon-hadir"><i class="fa-solid fa-building"></i></div>
                                         <div class="s-name">Hadir</div>
@@ -672,13 +833,13 @@
                                     <label class="status-card" for="status_wfh">
                                         <div class="s-icon s-icon-wfh"><i class="fa-solid fa-house"></i></div>
                                         <div class="s-name">WFH</div>
-                                        <div class="s-desc">Kerja remote</div>
+                                        <div class="s-desc">Kerja dari luar kantor</div>
                                     </label>
                                 </div>
 
                                 <!-- Sakit -->
                                 <div>
-                                    <input type="radio" class="btn-check" name="status" id="status_sakit" value="sakit" {{ old('status') === 'sakit' ? 'checked' : '' }} autocomplete="off">
+                                    <input type="radio" class="btn-check" name="status" id="status_sakit" value="sakit" {{ old('status', $isHadirWfhDisabled ? 'sakit' : '') === 'sakit' ? 'checked' : '' }} autocomplete="off">
                                     <label class="status-card" for="status_sakit">
                                         <div class="s-icon s-icon-sakit"><i class="fa-solid fa-face-tired"></i></div>
                                         <div class="s-name">Sakit</div>
@@ -699,19 +860,26 @@
                         </div>
 
                         <!-- Location Locker Section -->
-                        <div class="mb-3 location-panel" id="location_section">
-                            <label class="form-label-admin" id="location_label">Lokasi WFH <span class="text-danger">*</span></label>
-                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-center">
-                                <i class="fa-solid fa-location-dot text-primary" style="font-size:1.2rem;"></i>
-                                <div>
-                                    <div id="location_status" class="small">Klik Kunci Lokasi untuk menyimpan posisi WFH.</div>
-                                    <div class="location-meta mt-1 small">
-                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy">Akurasi: -</span>
-                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates">Koordinat: -</span>
+                        <div class="mb-3 location-panel show" id="location_section">
+                            <label class="form-label-admin" id="location_label">Lokasi WFH / Kantor <span class="text-danger">*</span></label>
+                            <div class="location-status p-3 border rounded-3 bg-light d-flex gap-3 align-items-start">
+                                <i class="fa-solid fa-location-dot text-primary mt-1" style="font-size:1.3rem;"></i>
+                                <div class="w-100">
+                                    <div id="location_status" class="small fw-semibold text-dark">Klik tombol di bawah untuk mengunci lokasi.</div>
+                                    <div id="location_address" class="small text-muted mt-1" style="display:none;"></div>
+                                    <div class="location-meta mt-2 d-flex flex-wrap gap-1 align-items-center" style="display:none;">
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_accuracy" style="display:none;">Akurasi: -</span>
+                                        <span class="badge bg-secondary-subtle text-dark" id="location_coordinates" style="display:none;">Koordinat: -</span>
+                                        <a href="#" target="_blank" id="location_map_link" class="badge bg-primary-subtle text-primary text-decoration-none" style="display:none;">
+                                            <i class="fa-solid fa-map-location-dot me-1"></i> Buka Google Maps
+                                        </a>
                                     </div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2 rounded-3" id="lock_location">
-                                        <i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi
-                                    </button>
+                                    <div class="mt-2 d-flex align-items-center gap-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm rounded-3" id="lock_location">
+                                            <i class="fa-solid fa-location-dot me-1"></i> Kunci Lokasi
+                                        </button>
+                                        <span id="location_spinner" class="spinner-border spinner-border-sm text-primary" style="display:none;" role="status"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -728,7 +896,7 @@
                             </div>
                             <div class="camera-panel" id="camera_panel" style="display: none;">
                                 <video id="camera_video" autoplay playsinline muted></video>
-                                <img src="" class="camera-preview" id="camera_preview" alt="Preview foto">
+                                <img src="" class="camera-preview" id="camera_preview" alt="Pratinjau foto">
                                 <canvas id="camera_canvas" class="d-none"></canvas>
                                 <div class="camera-actions p-2 bg-light border-top d-flex justify-content-between align-items-center">
                                     <span class="camera-message small text-muted" id="camera_message">Kamera Aktif</span>
@@ -740,8 +908,8 @@
                         </div>
 
                         <!-- Upload File (for Sakit / Izin) -->
-                        <div class="mb-3" id="photo_section">
-                            <label id="foto_label" class="form-label-admin">Surat Keterangan / Lampiran <span class="text-danger">*</span></label>
+                        <div class="mb-3" id="photo_section" style="display: none;">
+                            <label id="foto_label" class="form-label-admin">Surat Keterangan / Lampiran</label>
                             <div class="upload-zone p-3 border text-center rounded-3 bg-light">
                                 <i class="fa-solid fa-cloud-arrow-up text-muted d-block mb-1" style="font-size: 1.5rem;"></i>
                                 <div class="small fw-semibold text-dark" id="upload_text">Klik untuk unggah berkas</div>
@@ -754,9 +922,9 @@
                         </div>
 
                         <!-- Laporan / Alasan (Izin / Sakit) -->
-                        <div class="mb-3">
+                        <div class="mb-3" id="laporan_section" style="display: none;">
                             <label for="laporan" id="laporan_label" class="form-label-admin">Catatan/Alasan <span class="text-danger">*</span></label>
-                            <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Rincian alasan atau keterangan tambahan..." required>{{ old('keterangan') }}</textarea>
+                            <textarea name="keterangan" id="laporan" rows="2" class="form-control form-control-admin w-100" placeholder="Rincian alasan atau keterangan tambahan...">{{ old('keterangan') }}</textarea>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 py-2.5 rounded-3">
@@ -911,8 +1079,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     const radios = document.querySelectorAll('input[name="status"]');
     const attendanceForm = document.getElementById('attendanceForm');
+    const photoSection = document.getElementById('photo_section');
     const fotoLabel = document.getElementById('foto_label');
     const fotoInput = document.getElementById('foto');
+    const laporanSection = document.getElementById('laporan_section');
     const laporanLabel = document.getElementById('laporan_label');
     const laporanInput = document.getElementById('laporan');
     const fileNameDiv = document.getElementById('file_name');
@@ -933,39 +1103,78 @@ document.addEventListener('DOMContentLoaded', function() {
     const capturePhoto = document.getElementById('capture_photo');
     const locationSection = document.getElementById('location_section');
     const locationStatus = document.getElementById('location_status');
+    const locationAddress = document.getElementById('location_address');
     const locationAccuracy = document.getElementById('location_accuracy');
     const locationCoordinates = document.getElementById('location_coordinates');
+    const locationMapLink = document.getElementById('location_map_link');
+    const locationSpinner = document.getElementById('location_spinner');
     const latitudeInput = document.getElementById('lokasi_latitude');
     const longitudeInput = document.getElementById('lokasi_longitude');
     const accuracyInput = document.getElementById('lokasi_akurasi');
     const lockLocationButton = document.getElementById('lock_location');
-    const taskSelectionContainer = document.getElementById('task_selection_container');
-    const taskSelectEl = document.getElementById('task_id_select');
     let previewUrl = null;
     let cameraPreviewUrl = null;
     let cameraStream = null;
+
+    let isAcquiringLocation = false;
+    let activeWatchId = null;
+
+    async function fetchAddress(lat, lng) {
+        if (!locationAddress) return;
+        try {
+            const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+                headers: { 'Accept-Language': 'id,en' }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.display_name) {
+                    locationAddress.innerHTML = `<i class="fa-solid fa-map-pin text-danger me-1"></i> <span class="fw-medium text-dark">${data.display_name}</span>`;
+                    locationAddress.style.display = 'block';
+                }
+            }
+        } catch (e) {
+            // Ignore geocoding network errors silently
+        }
+    }
 
     function setLocation(position, options = {}) {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         const accuracy = position.coords.accuracy;
 
+        // Store full high-precision coordinates (7 decimal places ~ 1.1 cm)
         if (latitudeInput) latitudeInput.value = lat.toFixed(7);
         if (longitudeInput) longitudeInput.value = lng.toFixed(7);
-        if (accuracyInput) accuracyInput.value = accuracy ? accuracy.toFixed(2) : '';
-        if (locationStatus) locationStatus.innerText = options.message || 'Lokasi WFH/Kantor terkunci. Klik Kunci Lokasi lagi jika ingin memperbarui.';
-        if (locationAccuracy) locationAccuracy.innerText = `Akurasi: ${accuracy ? Math.round(accuracy) : '-'} m`;
-        if (locationCoordinates) locationCoordinates.innerText = `Koordinat: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        if (lockLocationButton) lockLocationButton.innerHTML = '<i class="fa-solid fa-location-crosshairs me-1"></i> Ambil Ulang Lokasi';
-    }
+        if (accuracyInput) accuracyInput.value = accuracy ? Math.round(accuracy) : '';
 
-    // Auto load location if GPS is available
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(position => {
-            setLocation(position, { message: 'Lokasi berhasil terdeteksi otomatis.' });
-        }, () => {
-            // Keep status message default
-        }, { enableHighAccuracy: true, timeout: 10000 });
+        if (locationStatus) {
+            locationStatus.innerHTML = options.message || '<span class="text-success fw-semibold">Lokasi terkunci</span>';
+        }
+
+        // Accuracy badge styling (hidden from UI view as requested, kept for system inputs)
+        if (locationAccuracy) {
+            locationAccuracy.style.display = 'none';
+        }
+
+        if (locationCoordinates) {
+            locationCoordinates.style.display = 'none';
+        }
+
+        // Google Maps direct verification link
+        if (locationMapLink) {
+            locationMapLink.href = `https://www.google.com/maps?q=${lat.toFixed(7)},${lng.toFixed(7)}`;
+            locationMapLink.style.display = 'none';
+        }
+
+        if (lockLocationButton) {
+            lockLocationButton.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i> Perbarui Lokasi';
+            lockLocationButton.disabled = false;
+        }
+
+        if (locationSpinner) locationSpinner.style.display = 'none';
+
+        // Asynchronously fetch human-readable street address
+        fetchAddress(lat, lng);
     }
 
     function setLocationError(message) {
@@ -973,16 +1182,26 @@ document.addEventListener('DOMContentLoaded', function() {
         if (latitudeInput) latitudeInput.value = '';
         if (longitudeInput) longitudeInput.value = '';
         if (accuracyInput) accuracyInput.value = '';
-        if (locationAccuracy) locationAccuracy.innerText = 'Akurasi: -';
-        if (locationCoordinates) locationCoordinates.innerText = 'Koordinat: -';
-        if (lockLocationButton) lockLocationButton.innerHTML = '<i class="fa-solid fa-location-crosshairs me-1"></i> Kunci Lokasi';
+        if (locationAccuracy) {
+            locationAccuracy.style.display = 'none';
+        }
+        if (locationCoordinates) {
+            locationCoordinates.style.display = 'none';
+        }
+        if (locationMapLink) locationMapLink.style.display = 'none';
+        if (locationAddress) locationAddress.style.display = 'none';
+        if (lockLocationButton) {
+            lockLocationButton.innerHTML = '<i class="fa-solid fa-location-dot me-1"></i> Kunci Lokasi';
+            lockLocationButton.disabled = false;
+        }
+        if (locationSpinner) locationSpinner.style.display = 'none';
     }
 
     function showLocationSection() {
         if (!locationSection) return;
         locationSection.classList.add('show');
         if (!latitudeInput?.value || !longitudeInput?.value) {
-            if (locationStatus) locationStatus.innerText = 'Klik Kunci Lokasi untuk memverifikasi GPS absensi Anda.';
+            if (locationStatus) locationStatus.innerText = 'Klik Kunci Lokasi untuk menyimpan posisi Anda.';
         }
     }
 
@@ -991,25 +1210,114 @@ document.addEventListener('DOMContentLoaded', function() {
         showLocationSection();
     }
 
-    function captureLocationOnce() {
+    /**
+     * High-Precision Progressive Geolocation Acquisition
+     * Collects continuous GPS / Wi-Fi trilateration updates via watchPosition
+     * to ensure the smallest possible error radius is locked.
+     */
+    function acquireHighAccuracyLocation() {
         if (!navigator.geolocation) {
-            return Promise.reject(new Error('Browser ini tidak mendukung geolocation. Gunakan browser lain.'));
+            setLocationError('Browser ini tidak bisa mengambil lokasi. Gunakan Chrome, Safari, atau Edge.');
+            return Promise.reject(new Error('Browser ini tidak bisa mengambil lokasi.'));
         }
 
-        if (locationStatus) locationStatus.innerText = 'Mengambil lokasi saat ini...';
+        if (isAcquiringLocation) return Promise.resolve();
+        isAcquiringLocation = true;
+
+        if (lockLocationButton) {
+            lockLocationButton.disabled = true;
+            lockLocationButton.innerHTML = '<i class="fa-solid fa-location-dot fa-spin me-1"></i> Mengunci Lokasi...';
+        }
+        if (locationSpinner) locationSpinner.style.display = 'inline-block';
+        if (locationStatus) {
+            locationStatus.innerHTML = '<span class="text-primary fw-semibold">Sedang mengunci lokasi...</span>';
+        }
 
         return new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
+            let bestPosition = null;
+            const maxDurationMs = 6000; // Allow GPS hardware up to 6 seconds to stabilize
+            const desiredAccuracyMeters = 20; // 20m or lower is high accuracy
+
+            if (activeWatchId !== null) {
+                navigator.geolocation.clearWatch(activeWatchId);
+                activeWatchId = null;
+            }
+
+            const timeoutId = setTimeout(() => {
+                finishAcquisition();
+            }, maxDurationMs);
+
+            function finishAcquisition() {
+                if (activeWatchId !== null) {
+                    navigator.geolocation.clearWatch(activeWatchId);
+                    activeWatchId = null;
+                }
+                clearTimeout(timeoutId);
+                isAcquiringLocation = false;
+
+                if (bestPosition) {
+                    setLocation(bestPosition, {
+                        message: '<span class="text-success fw-semibold">Lokasi terkunci</span>'
+                    });
+                    resolve(bestPosition);
+                } else {
+                    setLocationError('Gagal mendapatkan sinyal GPS. Pastikan GPS/izin lokasi aktif pada perangkat.');
+                    reject(new Error('Gagal mendapatkan sinyal GPS.'));
+                }
+            }
+
+            activeWatchId = navigator.geolocation.watchPosition(
                 position => {
-                    setLocation(position);
-                    resolve(position);
+                    const acc = position.coords.accuracy;
+
+                    if (!bestPosition || acc < bestPosition.coords.accuracy) {
+                        bestPosition = position;
+                    }
+
+                    if (locationStatus) {
+                        locationStatus.innerHTML = '<span class="text-primary">Mengunci titik lokasi...</span>';
+                    }
+
+                    // If excellent accuracy is reached (< 20m), lock immediately
+                    if (acc <= desiredAccuracyMeters) {
+                        finishAcquisition();
+                    }
                 },
-                () => {
-                    setLocationError('Lokasi belum bisa diambil. Izinkan akses lokasi browser Anda.');
-                    reject(new Error('Lokasi belum bisa diambil.'));
+                error => {
+                    if (bestPosition) {
+                        finishAcquisition();
+                    } else {
+                        isAcquiringLocation = false;
+                        if (activeWatchId !== null) {
+                            navigator.geolocation.clearWatch(activeWatchId);
+                            activeWatchId = null;
+                        }
+                        clearTimeout(timeoutId);
+                        let errorMsg = 'Lokasi belum bisa diambil. Izinkan akses lokasi pada browser/perangkat Anda.';
+                        if (error.code === error.PERMISSION_DENIED) {
+                            errorMsg = 'Akses lokasi ditolak. Silakan klik ikon gembok/lokasi di address bar browser dan izinkan lokasi.';
+                        } else if (error.code === error.POSITION_UNAVAILABLE) {
+                            errorMsg = 'Sinyal lokasi tidak tersedia. Coba aktifkan GPS perangkat atau hubungkan ke Wi-Fi.';
+                        } else if (error.code === error.TIMEOUT) {
+                            errorMsg = 'Waktu permintaan lokasi habis. Silakan klik tombol Kunci Lokasi lagi.';
+                        }
+                        setLocationError(errorMsg);
+                        reject(new Error(errorMsg));
+                    }
                 },
-                { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
+                }
             );
+        });
+    }
+
+    // Auto-detect high accuracy position on page load
+    if (navigator.geolocation) {
+        acquireHighAccuracyLocation().catch(() => {
+            // Keep default message if auto-detect requires user interaction
         });
     }
 
@@ -1033,7 +1341,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (cameraMessage) cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
         } catch (error) {
             if (cameraStartActions) cameraStartActions.style.display = 'flex';
-            if (cameraMessage) cameraMessage.innerText = 'Kamera tidak bisa dibuka. Gunakan upload gambar manual.';
+            if (cameraMessage) cameraMessage.innerText = 'Kamera tidak bisa dibuka. Unggah gambar secara manual.';
         }
     }
 
@@ -1135,16 +1443,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (lockLocationButton) {
         lockLocationButton.addEventListener('click', function() {
-            captureLocationOnce().catch(error => {
+            acquireHighAccuracyLocation().catch(error => {
                 if (window.Swal) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Lokasi belum bisa dikunci',
-                        text: error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi.',
+                        text: error.message || 'Izinkan akses lokasi di browser agar lokasi bisa dikunci.',
                         confirmButtonColor: '#6c5ce7'
                     });
                 } else {
-                    alert(error.message || 'Izinkan akses lokasi browser untuk mengunci lokasi.');
+                    alert(error.message || 'Izinkan akses lokasi di browser agar lokasi bisa dikunci.');
                 }
             });
         });
@@ -1157,19 +1465,52 @@ document.addEventListener('DOMContentLoaded', function() {
             const isCheckout = !!document.getElementById('status_checkout');
             
             const needsCamera = (!isCheckout && ['hadir', 'wfh', 'sakit'].includes(statusVal)) || (isCheckout && statusVal === 'sakit');
+            const needsPhoto = isCheckout && ['hadir', 'wfh'].includes(statusVal);
+            const needsLaporan = (isCheckout && ['hadir', 'wfh'].includes(statusVal)) || (!isCheckout && statusVal === 'izin');
             const needsLocation = true; // GPS location is required for all attendance statuses
 
-            if (needsCamera && (!fotoKameraInput || fotoKameraInput.files.length === 0)) {
+            if (needsCamera && (!fotoKameraInput || !fotoKameraInput.files || fotoKameraInput.files.length === 0)) {
                 e.preventDefault();
                 if (window.Swal) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Foto kamera belum diambil',
-                        text: 'Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu sebagai bukti kehadiran.',
+                        text: 'Klik Nyalakan Kamera lalu Ambil Foto terlebih dahulu sebagai bukti kehadiran.',
                         confirmButtonColor: '#6c5ce7'
                     });
                 } else {
-                    alert('Klik Nyalakan Kamera, lalu Ambil Foto terlebih dahulu.');
+                    alert('Klik Nyalakan Kamera lalu Ambil Foto terlebih dahulu.');
+                }
+                return;
+            }
+
+            if (needsPhoto && (!fotoInput || !fotoInput.files || fotoInput.files.length === 0)) {
+                e.preventDefault();
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Bukti pengerjaan belum diunggah',
+                        text: 'Pilih dan unggah gambar bukti pengerjaan Anda hari ini.',
+                        confirmButtonColor: '#6c5ce7'
+                    });
+                } else {
+                    alert('Pilih dan unggah gambar bukti pengerjaan Anda hari ini.');
+                }
+                return;
+            }
+
+            if (needsLaporan && (!laporanInput || !laporanInput.value.trim())) {
+                e.preventDefault();
+                const msg = isCheckout ? 'Laporan hasil pekerjaan hari ini wajib diisi sebelum mengirim absen pulang.' : 'Alasan izin wajib diisi sebelum mengirim absensi.';
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Laporan/Keterangan belum diisi',
+                        text: msg,
+                        confirmButtonColor: '#6c5ce7'
+                    });
+                } else {
+                    alert(msg);
                 }
                 return;
             }
@@ -1187,7 +1528,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         alert('Klik Kunci Lokasi terlebih dahulu sebelum mengirim absensi.');
                     }
+                    return;
                 }
+            }
+
+            // Show submit loading feedback
+            const submitBtn = attendanceForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Mengirim absensi...';
             }
         });
     }
@@ -1198,26 +1547,71 @@ document.addEventListener('DOMContentLoaded', function() {
         const v = checked.value;
         const isCheckout = !!document.getElementById('status_checkout');
 
-        const map = {
-            hadir: ['Lampiran Tambahan (Opsional)', false, 'Laporan Pekerjaan Harian', 'Deskripsi pekerjaan hari ini...'],
-            wfh: ['Lampiran Tambahan (Opsional)', false, 'Rencana & Progres WFH', 'Tuliskan project/task yang dikerjakan dari rumah hari ini...'],
-            sakit: ['Surat Keterangan Sakit', !isCheckout, 'Keterangan Sakit', 'Rincian kondisi kesehatan...'],
-            izin: ['Lampiran Izin (Opsional)', false, 'Alasan Izin', 'Alasan pengajuan izin...']
-        };
-        const m = map[v] || ['Lampiran', false, 'Catatan', 'Keterangan tambahan...'];
-        
-        if (fotoLabel) {
-            fotoLabel.innerHTML = m[0] + (m[1] ? ' <span class="text-danger">*</span>' : '');
-        }
-        if (fotoInput) {
-            fotoInput.required = m[1];
-        }
-        if (laporanLabel) {
-            laporanLabel.innerHTML = m[2] + (v === 'izin' || (isCheckout && ['hadir', 'wfh'].includes(v)) ? ' <span class="text-danger">*</span>' : '');
-        }
-        if (laporanInput) {
-            laporanInput.placeholder = m[3];
-            laporanInput.required = v === 'izin' || (isCheckout && ['hadir', 'wfh'].includes(v));
+        if (isCheckout) {
+            // Checkout Form Logic
+            if (['hadir', 'wfh'].includes(v)) {
+                if (photoSection) photoSection.style.display = 'block';
+                if (fotoLabel) fotoLabel.innerHTML = 'Unggah Gambar Bukti Pengerjaan <span class="text-danger">*</span>';
+                if (fotoInput) fotoInput.required = true;
+                if (laporanSection) laporanSection.style.display = 'block';
+                if (laporanLabel) laporanLabel.innerHTML = 'Laporan Hasil Pekerjaan Hari Ini <span class="text-danger">*</span>';
+                if (laporanInput) {
+                    laporanInput.placeholder = 'Jelaskan progres pekerjaan Anda hari ini...';
+                    laporanInput.required = true;
+                }
+            } else if (v === 'sakit') {
+                if (photoSection) photoSection.style.display = 'none';
+                if (fotoInput) fotoInput.required = false;
+                if (laporanSection) laporanSection.style.display = 'block';
+                if (laporanLabel) laporanLabel.innerHTML = 'Catatan/Keterangan Tambahan';
+                if (laporanInput) {
+                    laporanInput.placeholder = 'Keterangan tambahan...';
+                    laporanInput.required = false;
+                }
+            } else {
+                if (photoSection) photoSection.style.display = 'none';
+                if (fotoInput) fotoInput.required = false;
+                if (laporanSection) laporanSection.style.display = 'block';
+                if (laporanLabel) laporanLabel.innerHTML = 'Catatan/Keterangan Tambahan';
+                if (laporanInput) {
+                    laporanInput.placeholder = 'Keterangan tambahan...';
+                    laporanInput.required = false;
+                }
+            }
+        } else {
+            // Check-in Form Logic: No daily report on Hadir / WFH!
+            if (['hadir', 'wfh'].includes(v)) {
+                if (photoSection) photoSection.style.display = 'none';
+                if (fotoInput) {
+                    fotoInput.required = false;
+                    fotoInput.value = '';
+                }
+                if (laporanSection) laporanSection.style.display = 'none';
+                if (laporanInput) {
+                    laporanInput.required = false;
+                    laporanInput.value = '';
+                }
+            } else if (v === 'sakit') {
+                if (photoSection) photoSection.style.display = 'block';
+                if (fotoLabel) fotoLabel.innerHTML = 'Surat Keterangan Dokter (Opsional)';
+                if (fotoInput) fotoInput.required = false;
+                if (laporanSection) laporanSection.style.display = 'block';
+                if (laporanLabel) laporanLabel.innerHTML = 'Keterangan Sakit';
+                if (laporanInput) {
+                    laporanInput.placeholder = 'Rincian kondisi kesehatan...';
+                    laporanInput.required = false;
+                }
+            } else if (v === 'izin') {
+                if (photoSection) photoSection.style.display = 'block';
+                if (fotoLabel) fotoLabel.innerHTML = 'Lampiran Izin (Opsional)';
+                if (fotoInput) fotoInput.required = false;
+                if (laporanSection) laporanSection.style.display = 'block';
+                if (laporanLabel) laporanLabel.innerHTML = 'Alasan Izin <span class="text-danger">*</span>';
+                if (laporanInput) {
+                    laporanInput.placeholder = 'Alasan pengajuan izin...';
+                    laporanInput.required = true;
+                }
+            }
         }
 
         // Update GPS Location label & description dynamically
@@ -1238,19 +1632,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (v === 'hadir') {
                 locStatusText.innerText = 'Klik Kunci Lokasi untuk memverifikasi posisi Anda di kantor.';
             } else {
-                locStatusText.innerText = 'Klik Kunci Lokasi untuk memverifikasi GPS absensi Anda.';
-            }
-        }
-
-        // Show/hide task selection dropdown (only on check-in when user has no active task but has available tasks)
-        if (!isCheckout && taskSelectionContainer && taskSelectEl) {
-            if (['hadir', 'wfh'].includes(v)) {
-                taskSelectionContainer.style.display = 'block';
-                taskSelectEl.required = true;
-            } else {
-                taskSelectionContainer.style.display = 'none';
-                taskSelectEl.required = false;
-                taskSelectEl.value = '';
+                locStatusText.innerText = 'Klik Kunci Lokasi untuk menyimpan posisi Anda.';
             }
         }
 
@@ -1261,7 +1643,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!cameraStream && cameraPanel) cameraPanel.style.display = 'none';
             if (!cameraStream && cameraStartActions) cameraStartActions.style.display = 'flex';
             if (cameraLabel) {
-                cameraLabel.innerHTML = 'Foto Kamera <span class="text-danger">*</span>';
+                cameraLabel.innerHTML = (isCheckout ? 'Foto Kamera Terkini' : 'Foto Kamera') + ' <span class="text-danger">*</span>';
             }
         } else {
             if (cameraSection) cameraSection.style.display = 'none';
@@ -1286,5 +1668,28 @@ document.addEventListener('DOMContentLoaded', function() {
     radios.forEach(r => r.addEventListener('change', updateLabels));
     updateLabels();
 });
+
+function confirmCancelTask(taskId, taskJudul) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Batalkan Pilihan Tugas?',
+            html: `Apakah Anda yakin ingin membatalkan pengerjaan <strong>${taskJudul}</strong>?<br><small class="text-muted">Tugas atau modul ini akan kembali tersedia sehingga Anda bisa memilih pekerjaan lain.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Ya, Batalkan Pilihan',
+            cancelButtonText: 'Kembali'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                document.getElementById('form-cancel-' + taskId).submit();
+            }
+        });
+    } else {
+        if (confirm(`Apakah Anda yakin ingin membatalkan pengerjaan tugas "${taskJudul}"?`)) {
+            document.getElementById('form-cancel-' + taskId).submit();
+        }
+    }
+}
 </script>
 @endsection

@@ -10,6 +10,7 @@ return new class extends Migration
     {
         if (Schema::hasTable('md_project_module_members') && ! Schema::hasTable('module_members')) {
             Schema::rename('md_project_module_members', 'module_members');
+
             return;
         }
 

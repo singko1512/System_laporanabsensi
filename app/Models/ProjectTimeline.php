@@ -10,7 +10,9 @@ class ProjectTimeline extends Model
     use HasFactory;
 
     public const STATUS_BELUM_DIMULAI = 'belum_dimulai';
+
     public const STATUS_BERJALAN = 'berjalan';
+
     public const STATUS_SELESAI = 'selesai';
 
     protected $table = 'md_project_timelines';

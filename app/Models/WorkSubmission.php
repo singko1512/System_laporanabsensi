@@ -10,7 +10,9 @@ class WorkSubmission extends Model
     use HasFactory;
 
     public const STATUS_SUBMITTED = 'submitted';
+
     public const STATUS_REVISION = 'revision';
+
     public const STATUS_APPROVED = 'approved';
 
     protected $table = 'md_work_submissions';

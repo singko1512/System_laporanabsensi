@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Form Absensi - Absensi Harian')
+@section('title', 'Form Absensi - SIMALAM')
 
 @section('styles')
 <style>
     .status-option {
         border: 1.5px solid var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         background: var(--white);
         padding: 0.85rem 0.5rem;
         cursor: pointer;
@@ -26,7 +26,7 @@
 
     .upload-zone {
         border: 2px dashed var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         padding: 2rem 1rem;
         text-align: center;
         cursor: pointer;
@@ -53,7 +53,7 @@
         display: none;
         margin-top: 0.85rem;
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         overflow: hidden;
         background: #0f172a;
     }
@@ -92,7 +92,7 @@
         gap: 0.75rem;
         padding: 0.9rem 1rem;
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 10px;
         background: #fff;
     }
 </style>
@@ -153,7 +153,7 @@
                             <div class="text-muted" style="font-size:0.72rem;">PNG, JPG, JPEG, WEBP - Maks 5 MB</div>
                             <input type="file" name="foto" id="foto" accept="image/*">
                             <div class="file-name" id="file_name"><i class="fa-solid fa-circle-check me-1"></i><span id="fname"></span></div>
-                            <img src="" class="upload-preview" id="foto_preview" alt="Preview lampiran">
+                            <img src="" class="upload-preview" id="foto_preview" alt="Pratinjau lampiran">
                         </div>
                     </div>
 
@@ -168,7 +168,7 @@
                         </div>
                         <div class="camera-panel" id="camera_panel">
                             <video id="camera_video" autoplay playsinline muted></video>
-                            <img src="" class="camera-preview" id="camera_preview" alt="Preview foto kamera">
+                            <img src="" class="camera-preview" id="camera_preview" alt="Pratinjau foto kamera">
                             <canvas id="camera_canvas" class="d-none"></canvas>
                             <div class="camera-actions">
                                 <span class="camera-message" id="camera_message">Kamera aktif untuk Hadir/WFH.</span>
@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
             cameraMessage.innerText = 'Kamera aktif. Klik Ambil Foto sebelum kirim absensi.';
         } catch (error) {
             if (cameraStartActions) cameraStartActions.style.display = 'flex';
-            cameraMessage.innerText = 'Kamera tidak bisa dibuka. Gunakan upload gambar manual.';
+            cameraMessage.innerText = 'Kamera tidak bisa dibuka. Unggah gambar secara manual.';
         }
     }
 

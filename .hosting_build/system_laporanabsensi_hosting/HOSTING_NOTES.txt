@@ -1,0 +1,28 @@
+Paket hosting System Laporan Absensi
+
+Tidak termasuk di ZIP:
+- .env lokal
+- .git, .agents
+- node_modules
+- tests dan phpunit.xml
+- file cache/log/storage lokal
+- public/uploads lokal
+- memori.md dan catatan kerja lokal
+- migration dummy peserta: 2026_08_02_223000_seed_dummy_peserta_per_official_bidang.php
+- migration hide dummy username: 2026_08_02_224000_hide_dummy_peserta_usernames.php
+
+Seeder produksi:
+- Master data
+- 5 bidang resmi
+- akun superadmin/admin
+- tanpa peserta dummy
+- tanpa pembimbing dummy
+- tanpa absensi/project dummy
+
+Langkah umum setelah upload:
+1. Buat .env dari .env.example dan isi konfigurasi hosting/database.
+2. Pastikan APP_ENV=production dan APP_DEBUG=false.
+3. Jalankan php artisan key:generate jika APP_KEY masih kosong.
+4. Jalankan php artisan migrate --seed.
+5. Jalankan php artisan storage:link jika hosting mendukung symlink.
+6. Clear cache: php artisan optimize:clear.

@@ -10,7 +10,9 @@ class ProjectModule extends Model
     use HasFactory;
 
     public const STATUS_BELUM_DIMULAI = 'belum_dimulai';
+
     public const STATUS_BERJALAN = 'berjalan';
+
     public const STATUS_SELESAI = 'selesai';
 
     protected $table = 'md_project_modules';
@@ -89,7 +91,7 @@ class ProjectModule extends Model
 
         $this->update([
             'progress' => $progress,
-            'status' => $status
+            'status' => $status,
         ]);
 
         return $progress;
@@ -98,5 +100,19 @@ class ProjectModule extends Model
     public function getStatusLabelAttribute(): string
     {
         return self::statusOptions()[$this->status] ?? ucfirst(str_replace('_', ' ', (string) $this->status));
+    }
+
+    public function getIsChosenAttribute(): bool
+    {
+        if ($this->relationLoaded('tasks')) {
+            return $this->tasks->contains(function (ProjectTask $task): bool {
+                return $task->isModuleAssignment() && $task->user_id;
+            });
+        }
+
+        return $this->tasks()
+            ->whereNotNull('user_id')
+            ->where('judul', 'like', ProjectTask::MODULE_ASSIGNMENT_PREFIX.'%')
+            ->exists();
     }
 }
